@@ -4,56 +4,124 @@ let currentTab = "script";
 let showSlash = true;
 let showTrans = true;
 let bookmarks = new Set();
-let popup = null;
 let playing = false;
 let progressInterval = null;
+
+// AI会話履歴
 let aiChatHistory = [];
+let practiceMode = "free"; // free | roleplay | correction | quiz
+let practiceHistory = [];
 
 const LESSONS = [THAILAND_LESSON, FASHION_LESSON];
 
-// ─── AI API（サーバー経由・APIキーはサーバー側のみ）───────────────────────
-async function askAI(userMessage, lesson) {
-  const systemPrompt = `あなたは英語学習アシスタントです。
-以下のスクリプトを学習している日本人ユーザーをサポートしてください。
+// ─── PRACTICE MODES ──────────────────────────────────────────────────────────
+const PRACTICE_MODES = {
+  free: {
+    label: "💬 自由質問",
+    icon: "💬",
+    desc: "単語・文法・発音など何でも聞く",
+    color: "#3A6FD8"
+  },
+  conversation: {
+    label: "🗣️ 英会話練習",
+    icon: "🗣️",
+    desc: "AIと英語で会話練習",
+    color: "#27AE60"
+  },
+  correction: {
+    label: "✏️ 英作文添削",
+    icon: "✏️",
+    desc: "書いた英文をAIが添削",
+    color: "#F5A623"
+  },
+  roleplay: {
+    label: "🎭 ロールプレイ",
+    icon: "🎭",
+    desc: "場面設定で実践的な会話練習",
+    color: "#C0397A"
+  },
+  quiz: {
+    label: "🧠 クイズ",
+    icon: "🧠",
+    desc: "スクリプトの単語・内容クイズ",
+    color: "#8B5CF6"
+  }
+};
 
-スクリプトタイトル: ${lesson.title}
-スクリプト本文:
-${lesson.fullText}
-
-ルール:
-- 質問には日本語で丁寧に答えてください
-- 単語・フレーズの説明は「意味」「使い方」「例文」の形で答えてください
-- スクリプトに関係する英語の練習問題を求められたら出題してください
-- 発音のコツや覚え方のヒントも積極的に提供してください
-- 返答は簡潔に、でも分かりやすくしてください`;
-
-  const messages = [
-    ...aiChatHistory,
-    { role: "user", parts: [{ text: userMessage }] }
-  ];
-
+// ─── AI API ──────────────────────────────────────────────────────────────────
+async function callAI(messages, systemPrompt, maxTokens = 1000) {
   try {
-    // ★ APIキーはブラウザに渡さず、サーバー側の /api/chat で処理
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages, systemPrompt })
+      body: JSON.stringify({ messages, systemPrompt, maxTokens })
     });
-
     const data = await res.json();
     if (data.error) return `エラー: ${data.error}`;
-
-    const reply = data.reply;
-    aiChatHistory.push(
-      { role: "user", parts: [{ text: userMessage }] },
-      { role: "model", parts: [{ text: reply }] }
-    );
-    if (aiChatHistory.length > 20) aiChatHistory = aiChatHistory.slice(-20);
-    return reply;
-
+    return data.reply;
   } catch (e) {
     return `通信エラー: ${e.message}`;
   }
+}
+
+function getSystemPrompt(mode, lesson) {
+  const base = `スクリプトタイトル: ${lesson.title}\nスクリプト本文:\n${lesson.fullText}`;
+
+  const prompts = {
+    free: `あなたは親切な英語学習アシスタントです。
+${base}
+
+このスクリプトを学習している日本人をサポートしてください。
+- 質問には日本語で丁寧に答える
+- 単語・フレーズは「意味」「使い方」「例文」の形で説明
+- 発音のコツや覚え方も積極的に提供
+- 返答は簡潔にわかりやすく`,
+
+    conversation: `あなたはフレンドリーな英会話の練習相手です。
+${base}
+
+ルール:
+- 必ず英語で返答する
+- 相手の英語に間違いがあれば、会話の最後にさりげなく正しい表現を()内に示す
+- 上記スクリプトのトピック（旅行・ファッション）に関連した話題で会話する
+- 難しい単語を使ったら日本語訳を[]内に添える
+- 返答は2〜3文程度で簡潔に
+- 最後に必ず相手への質問を1つ加えて会話を続ける`,
+
+    correction: `あなたは英語の先生です。
+${base}
+
+ルール:
+- ユーザーが書いた英文を添削する
+- 間違いがあれば「❌ 原文」→「✅ 修正」の形で示す
+- 間違いの理由を日本語で簡潔に説明する
+- 良い表現は「👍 良い点」として褒める
+- より自然な言い回しがあれば提案する
+- 文法的に正しくても不自然な場合も指摘する`,
+
+    roleplay: `あなたは英会話のロールプレイ相手です。
+${base}
+
+現在のシナリオに応じて、リアルな英語で対話してください。
+- 必ず英語で返答する
+- ネイティブが実際に使う自然な表現を使う
+- 相手が詰まったら日本語でヒントを[]内に提供する
+- シナリオに沿った自然な流れで会話を進める`,
+
+    quiz: `あなたは英語クイズの出題者です。
+${base}
+
+ルール:
+- 上記スクリプトの単語・フレーズ・内容に関するクイズを出す
+- 問題形式: 穴埋め・日本語→英語・意味を答える など
+- 1問ずつ出題し、答えを待つ
+- 正解・不正解に関わらず解説を加える
+- 正解なら褒めて次の問題へ
+- 不正解なら正解を教えて覚え方のヒントを添える
+- 日本語で進行する`
+  };
+
+  return prompts[mode] || prompts.free;
 }
 
 // ─── SPEECH ──────────────────────────────────────────────────────────────────
@@ -142,7 +210,7 @@ function renderChunk(chunk, lesson) {
   return `<mark class="chunk-mark" data-item="${dataItem}" style="background:${c.bg};color:${c.text};border-bottom:2.5px solid ${c.border}">${escHtml(chunk.w)}${bm}</mark>`;
 }
 
-// ─── SCREENS ─────────────────────────────────────────────────────────────────
+// ─── HOME ────────────────────────────────────────────────────────────────────
 function renderHome() {
   document.getElementById("app").innerHTML = `
     <div class="home-screen">
@@ -168,10 +236,13 @@ function openLesson(id) {
   currentLesson = LESSONS.find(l => l.id === id);
   bookmarks = new Set();
   aiChatHistory = [];
+  practiceHistory = [];
+  practiceMode = "free";
   currentTab = "script";
   renderLesson();
 }
 
+// ─── LESSON ──────────────────────────────────────────────────────────────────
 function renderLesson() {
   const l = currentLesson;
   const tc = getTC(l);
@@ -198,7 +269,12 @@ function renderLesson() {
       </div>
 
       <div class="tab-bar">
-        ${[["script","📄 スクリプト"],["list","📚 単語一覧"],["notebook",`★ 単語帳${bookmarks.size > 0 ? ` (${bookmarks.size})` : ""}`],["ai","🤖 AI質問"]].map(([k,lb]) =>
+        ${[
+          ["script","📄 スクリプト"],
+          ["list","📚 単語一覧"],
+          ["notebook",`★ 単語帳${bookmarks.size > 0 ? ` (${bookmarks.size})` : ""}`],
+          ["practice","🗣️ 英会話練習"]
+        ].map(([k,lb]) =>
           `<button class="tab-btn${currentTab===k?" active":""}" onclick="switchTab('${k}')">${lb}</button>`
         ).join("")}
       </div>
@@ -226,10 +302,11 @@ function renderTabContent(l, tc, allItems, bmItems) {
   if (currentTab === "script")   return renderScriptTab(l, tc);
   if (currentTab === "list")     return renderListTab(l, tc, allItems);
   if (currentTab === "notebook") return renderNotebookTab(l, tc, bmItems);
-  if (currentTab === "ai")       return renderAITab(l);
+  if (currentTab === "practice") return renderPracticeTab(l);
   return "";
 }
 
+// ─── SCRIPT TAB ──────────────────────────────────────────────────────────────
 function renderScriptTab(l, tc) {
   return `
     <div class="controls-row">
@@ -257,13 +334,13 @@ function renderScriptTab(l, tc) {
     </div>`;
 }
 
+// ─── LIST TAB ────────────────────────────────────────────────────────────────
 function renderListTab(l, tc, allItems) {
   return `
     <div class="word-list">
       ${allItems.map(item => {
         const c = tc[item.t];
         const bm = bookmarks.has(item.w);
-        const di = escHtml(JSON.stringify(item));
         return `
           <div class="word-card" style="border-left:4px solid ${c.border}">
             <div class="word-card-main" onclick='openPopup(${JSON.stringify(item)})'>
@@ -275,7 +352,7 @@ function renderListTab(l, tc, allItems) {
               <div class="word-meaning">${escHtml(item.meaning)}</div>
             </div>
             <div class="word-card-actions">
-              <button class="icon-btn speak-btn" onclick="speakWord('${escHtml(item.w)}')">🔊</button>
+              <button class="icon-btn" onclick="speakWord('${escHtml(item.w)}')">🔊</button>
               <button class="icon-btn bm-btn${bm?" active":""}" onclick="toggleBookmark('${escHtml(item.w)}')">${bm?"★":"☆"}</button>
             </div>
           </div>`;
@@ -283,6 +360,7 @@ function renderListTab(l, tc, allItems) {
     </div>`;
 }
 
+// ─── NOTEBOOK TAB ────────────────────────────────────────────────────────────
 function renderNotebookTab(l, tc, bmItems) {
   if (!bmItems.length) return `
     <div class="empty-state">
@@ -309,7 +387,7 @@ function renderNotebookTab(l, tc, bmItems) {
               <div class="word-meaning">${escHtml(item.meaning)}</div>
             </div>
             <div class="word-card-actions">
-              <button class="icon-btn speak-btn" onclick="speakWord('${escHtml(item.w)}')">🔊</button>
+              <button class="icon-btn" onclick="speakWord('${escHtml(item.w)}')">🔊</button>
               <button class="icon-btn bm-btn active" onclick="toggleBookmark('${escHtml(item.w)}')">★</button>
             </div>
           </div>`;
@@ -317,28 +395,204 @@ function renderNotebookTab(l, tc, bmItems) {
     </div>`;
 }
 
-function renderAITab(l) {
+// ─── PRACTICE TAB ────────────────────────────────────────────────────────────
+function renderPracticeTab(l) {
+  const mode = PRACTICE_MODES[practiceMode];
+  const isConversation = practiceMode === "conversation" || practiceMode === "roleplay";
+
+  // ロールプレイのシナリオ選択肢
+  const roleplayScenarios = [
+    "✈️ 空港でのチェックイン",
+    "🏨 ホテルのフロントで",
+    "🍽️ レストランで注文",
+    "🛍️ ショッピングで店員と会話",
+    "🗺️ 道を聞く・教える",
+    "👗 ファッションについて語る"
+  ];
+
   return `
-    <div class="ai-tab">
-      <div class="ai-intro">
-        <div class="ai-intro-icon">🤖</div>
-        <div class="ai-intro-text">スクリプトについて何でも聞いてください！<br>単語の意味、発音のコツ、練習問題など</div>
+    <div class="practice-tab">
+
+      <!-- モード選択 -->
+      <div class="practice-mode-grid">
+        ${Object.entries(PRACTICE_MODES).map(([key, m]) => `
+          <button class="practice-mode-btn${practiceMode===key?" active":""}"
+            onclick="selectPracticeMode('${key}')"
+            style="${practiceMode===key ? `background:${m.color};color:#fff;border-color:${m.color}` : ""}">
+            <span class="practice-mode-icon">${m.icon}</span>
+            <span class="practice-mode-label">${m.label.replace(m.icon+" ","")}</span>
+          </button>
+        `).join("")}
       </div>
-      <div id="ai-messages" class="ai-messages">
-        ${aiChatHistory.filter((_,i) => i % 2 === 0).map((msg, i) => {
-          const reply = aiChatHistory[i*2+1];
-          return `
-            <div class="ai-bubble user">${escHtml(msg.parts[0].text)}</div>
-            ${reply ? `<div class="ai-bubble ai">${escHtml(reply.parts[0].text)}</div>` : ""}`;
-        }).join("")}
+
+      <!-- モード説明 -->
+      <div class="practice-desc" style="border-left:3px solid ${mode.color}">
+        <strong>${mode.label}</strong>　${mode.desc}
+        ${practiceMode === "conversation" ? `<br><small style="color:rgba(255,255,255,0.5)">💡 英語で話しかけてみましょう！</small>` : ""}
+        ${practiceMode === "correction" ? `<br><small style="color:rgba(255,255,255,0.5)">💡 英文を入力すると添削します</small>` : ""}
+        ${practiceMode === "quiz" ? `<br><small style="color:rgba(255,255,255,0.5)">💡「スタート」と入力してクイズ開始</small>` : ""}
       </div>
-      <div class="ai-input-row">
-        <input id="ai-input" class="ai-input" type="text"
-          placeholder="例：'goes back to' の使い方を教えて"
-          onkeydown="if(event.key==='Enter')sendAI()">
-        <button class="ai-send-btn" onclick="sendAI()" style="background:${l.theme.primary}">送信</button>
+
+      <!-- ロールプレイ シナリオ選択 -->
+      ${practiceMode === "roleplay" ? `
+        <div class="scenario-list">
+          <div class="scenario-title">🎭 シナリオを選んでください</div>
+          ${roleplayScenarios.map(s => `
+            <button class="scenario-btn" onclick="startRoleplay('${escHtml(s)}')">${s}</button>
+          `).join("")}
+        </div>
+      ` : ""}
+
+      <!-- チャット履歴 -->
+      <div id="practice-messages" class="ai-messages practice-messages">
+        ${practiceHistory.length === 0 ? `
+          <div class="practice-welcome">
+            ${mode.icon} ${getPracticeWelcome(practiceMode)}
+          </div>
+        ` : practiceHistory.map(m => `
+          <div class="ai-bubble ${m.role}">${escHtml(m.text)}</div>
+        `).join("")}
       </div>
+
+      <!-- 入力エリア -->
+      ${practiceMode !== "roleplay" || practiceHistory.length > 0 ? `
+        <div class="ai-input-row">
+          <input id="practice-input" class="ai-input" type="text"
+            placeholder="${getPracticePlaceholder(practiceMode)}"
+            onkeydown="if(event.key==='Enter')sendPractice()">
+          <button class="ai-send-btn" onclick="sendPractice()" style="background:${mode.color}">送信</button>
+        </div>
+        ${isConversation ? `
+          <button class="speak-input-btn" onclick="speakMyInput()" style="color:${mode.color}">
+            🔊 AIの返答を読み上げる
+          </button>
+        ` : ""}
+      ` : ""}
+
+      <!-- リセットボタン -->
+      ${practiceHistory.length > 0 ? `
+        <button class="reset-practice-btn" onclick="resetPractice()">🔄 会話をリセット</button>
+      ` : ""}
     </div>`;
+}
+
+function getPracticeWelcome(mode) {
+  const msgs = {
+    free: "スクリプトについて何でも聞いてください！",
+    conversation: "Let's practice English conversation!\nまず英語で話しかけてみてください 😊",
+    correction: "英文を入力してください。\n丁寧に添削します！",
+    roleplay: "シナリオを選んで会話練習を始めましょう！",
+    quiz: "「スタート」と入力してクイズを始めましょう！"
+  };
+  return msgs[mode] || "";
+}
+
+function getPracticePlaceholder(mode) {
+  const placeholders = {
+    free: "例：'goes back to' の使い方を教えて",
+    conversation: "Type in English...",
+    correction: "添削してほしい英文を入力...",
+    roleplay: "英語で話しかけてください...",
+    quiz: "「スタート」または答えを入力..."
+  };
+  return placeholders[mode] || "";
+}
+
+function selectPracticeMode(mode) {
+  practiceMode = mode;
+  practiceHistory = [];
+  renderLesson();
+  setTimeout(() => {
+    const msgs = document.getElementById("practice-messages");
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  }, 100);
+}
+
+function startRoleplay(scenario) {
+  practiceHistory = [];
+  // AIからシナリオ開始メッセージを取得
+  const systemPrompt = getSystemPrompt("roleplay", currentLesson) +
+    `\n\n現在のシナリオ: ${scenario}\nあなたからシナリオに合った役を演じて会話を始めてください。`;
+  addPracticeMessage("ai", "⏳ シナリオを準備中...");
+  renderPracticeMessages();
+
+  callAI(
+    [{ role: "user", parts: [{ text: `シナリオ「${scenario}」で会話練習を始めてください。あなたから話しかけてください。` }] }],
+    systemPrompt
+  ).then(reply => {
+    practiceHistory = [{ role: "ai", text: reply }];
+    renderLesson();
+    setTimeout(() => scrollPractice(), 100);
+  });
+}
+
+function addPracticeMessage(role, text) {
+  practiceHistory.push({ role, text });
+}
+
+function renderPracticeMessages() {
+  const msgs = document.getElementById("practice-messages");
+  if (!msgs) return;
+  msgs.innerHTML = practiceHistory.map(m =>
+    `<div class="ai-bubble ${m.role}">${escHtml(m.text)}</div>`
+  ).join("");
+  scrollPractice();
+}
+
+function scrollPractice() {
+  const msgs = document.getElementById("practice-messages");
+  if (msgs) msgs.scrollTop = msgs.scrollHeight;
+}
+
+async function sendPractice() {
+  const input = document.getElementById("practice-input");
+  if (!input) return;
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = "";
+
+  addPracticeMessage("user", msg);
+  addPracticeMessage("ai", "考え中...");
+  renderPracticeMessages();
+
+  // 会話履歴をAI形式に変換
+  const messages = practiceHistory
+    .filter(m => m.text !== "考え中...")
+    .slice(0, -1) // 最後のuserメッセージは別で渡す
+    .map(m => ({
+      role: m.role === "user" ? "user" : "model",
+      parts: [{ text: m.text }]
+    }));
+  messages.push({ role: "user", parts: [{ text: msg }] });
+
+  const systemPrompt = getSystemPrompt(practiceMode, currentLesson);
+  const reply = await callAI(messages, systemPrompt);
+
+  // 「考え中...」を置き換え
+  const idx = practiceHistory.findLastIndex(m => m.text === "考え中...");
+  if (idx !== -1) practiceHistory[idx] = { role: "ai", text: reply };
+
+  renderPracticeMessages();
+
+  // 英会話・ロールプレイモードはAIの返答を自動読み上げ
+  if (practiceMode === "conversation" || practiceMode === "roleplay") {
+    const englishOnly = reply.replace(/\[.*?\]/g, "").replace(/\(.*?\)/g, "");
+    speakWord(englishOnly);
+  }
+}
+
+function speakMyInput() {
+  // 最後のAIメッセージを読み上げ
+  const lastAI = [...practiceHistory].reverse().find(m => m.role === "ai");
+  if (lastAI) {
+    const englishOnly = lastAI.text.replace(/\[.*?\]/g, "").replace(/\(.*?\)/g, "");
+    speakWord(englishOnly);
+  }
+}
+
+function resetPractice() {
+  practiceHistory = [];
+  renderLesson();
 }
 
 // ─── TABS ────────────────────────────────────────────────────────────────────
@@ -359,7 +613,6 @@ function toggleBookmark(word) {
 // ─── POPUP ───────────────────────────────────────────────────────────────────
 function openPopup(item) {
   if (typeof item === "string") item = JSON.parse(item);
-  popup = item;
   const l = currentLesson;
   const tc = getTC(l);
   const c = tc[item.t];
@@ -468,30 +721,9 @@ function closeFlash() {
   document.getElementById("flash-card").classList.add("hidden");
 }
 
-// ─── AI CHAT ─────────────────────────────────────────────────────────────────
-async function sendAI() {
-  const input = document.getElementById("ai-input");
-  if (!input) return;
-  const msg = input.value.trim();
-  if (!msg) return;
-  input.value = "";
-
-  const msgs = document.getElementById("ai-messages");
-  if (msgs) {
-    msgs.innerHTML += `<div class="ai-bubble user">${escHtml(msg)}</div>`;
-    msgs.innerHTML += `<div class="ai-bubble ai loading">考え中<span class="dots">...</span></div>`;
-    msgs.scrollTop = msgs.scrollHeight;
-  }
-
-  const reply = await askAI(msg, currentLesson);
-
-  const loading = document.querySelector(".ai-bubble.loading");
-  if (loading) loading.outerHTML = `<div class="ai-bubble ai">${escHtml(reply)}</div>`;
-  if (msgs) msgs.scrollTop = msgs.scrollHeight;
-}
-
 // ─── INIT ────────────────────────────────────────────────────────────────────
 window.addEventListener("load", () => {
   window.speechSynthesis?.getVoices();
   renderHome();
 });
+

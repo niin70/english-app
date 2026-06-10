@@ -133,3 +133,34 @@ sup.bm-star { font-size: 9px; margin-left: 1px; }
 .practice-welcome { color: rgba(255,255,255,0.45); font-size: 14px; text-align: center; padding: 24px 10px; line-height: 1.8; white-space: pre-line; }
 .speak-input-btn { background: none; border: none; font-size: 12px; font-weight: 700; padding: 4px 0; cursor: pointer; opacity: 0.7; }
 .reset-practice-btn { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-radius: 99px; padding: 8px 16px; color: rgba(255,255,255,0.5); font-size: 12px; font-weight: 700; align-self: center; margin-top: 4px; }
+.lesson-card-wrap { position: relative; }
+.lesson-delete-btn { position: absolute; top: 12px; right: 12px; background: rgba(255,0,0,0.15); border: none; border-radius: 50%; width: 32px; height: 32px; font-size: 14px; cursor: pointer; }
+.add-lesson-btn { width: 100%; max-width: 480px; padding: 16px; background: rgba(255,255,255,0.08); border: 2px dashed rgba(255,255,255,0.2); border-radius: 18px; color: rgba(255,255,255,0.7); font-size: 16px; font-weight: 700; margin-bottom: 16px; cursor: pointer; }
+.add-lesson-btn:hover { background: rgba(255,255,255,0.12); }
+.create-header { text-align: center; margin-bottom: 24px; }
+.back-btn-home { background: none; border: none; color: rgba(255,255,255,0.5); font-size: 13px; padding: 0; margin-bottom: 8px; display: block; cursor: pointer; }
+.create-title { font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 8px; }
+.create-sub { font-size: 13px; color: rgba(255,255,255,0.5); }
+.create-examples { margin-bottom: 20px; }
+.create-example-title { font-size: 12px; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
+.example-btn { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-radius: 99px; padding: 8px 14px; color: rgba(255,255,255,0.7); font-size: 13px; margin-right: 8px; margin-bottom: 8px; cursor: pointer; }
+.create-input-area { margin-bottom: 16px; }
+.create-input-label { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 8px; }
+.lesson-textarea { width: 100%; height: 140px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 14px; padding: 14px; color: #fff; font-size: 14px; font-family: inherit; resize: none; outline: none; line-height: 1.6; }
+.lesson-textarea::placeholder { color: rgba(255,255,255,0.3); }
+.generate-btn { width: 100%; padding: 16px; background: linear-gradient(135deg,#3A6FD8,#8B5CF6); border: none; border-radius: 14px; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 16px; }
+.generate-btn:disabled { opacity: 0.6; }
+.generate-status { margin-bottom: 16px; }
+.generating { background: rgba(255,255,255,0.06); border-radius: 14px; padding: 24px; text-align: center; }
+.generating-icon { font-size: 36px; margin-bottom: 10px; }
+.generating-text { font-size: 14px; color: rgba(255,255,255,0.6); line-height: 1.6; }
+.generate-error { background: rgba(255,0,0,0.1); border: 1px solid rgba(255,0,0,0.2); border-radius: 10px; padding: 12px; color: #ff6b6b; font-size: 13px; text-align: center; }
+.preview-card { background: rgba(255,255,255,0.07); border-radius: 16px; padding: 20px; }
+.preview-title { font-size: 12px; color: #27AE60; font-weight: 700; margin-bottom: 8px; }
+.preview-lesson-title { font-size: 18px; font-weight: 800; color: #fff; margin-bottom: 10px; }
+.preview-fulltext { font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.6; margin-bottom: 10px; font-style: italic; }
+.preview-stats { font-size: 12px; color: rgba(255,255,255,0.4); margin-bottom: 16px; }
+.preview-btns { display: flex; gap: 10px; }
+.preview-save-btn { flex: 2; padding: 12px; border: none; border-radius: 10px; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; }
+.preview-retry-btn { flex: 1; padding: 12px; background: rgba(255,255,255,0.1); border: none; border-radius: 10px; color: rgba(255,255,255,0.7); font-weight: 700; font-size: 14px; cursor: pointer; }
+

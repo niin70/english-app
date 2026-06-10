@@ -6,46 +6,40 @@ let showTrans = true;
 let bookmarks = new Set();
 let playing = false;
 let progressInterval = null;
-
-// AI会話履歴
-let aiChatHistory = [];
-let practiceMode = "free"; // free | roleplay | correction | quiz
+let practiceMode = "free";
 let practiceHistory = [];
 
-const LESSONS = [THAILAND_LESSON, FASHION_LESSON];
+// ローカルストレージのキー
+const STORAGE_KEY = "english_app_custom_lessons";
+
+// カスタムレッスンをローカルストレージから読み込む
+function loadCustomLessons() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch (e) { return []; }
+}
+
+// カスタムレッスンをローカルストレージに保存
+function saveCustomLessons(lessons) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(lessons));
+  } catch (e) { console.error("保存エラー:", e); }
+}
+
+let customLessons = loadCustomLessons();
+
+function getLessons() {
+  return [THAILAND_LESSON, FASHION_LESSON, ...customLessons];
+}
 
 // ─── PRACTICE MODES ──────────────────────────────────────────────────────────
 const PRACTICE_MODES = {
-  free: {
-    label: "💬 自由質問",
-    icon: "💬",
-    desc: "単語・文法・発音など何でも聞く",
-    color: "#3A6FD8"
-  },
-  conversation: {
-    label: "🗣️ 英会話練習",
-    icon: "🗣️",
-    desc: "AIと英語で会話練習",
-    color: "#27AE60"
-  },
-  correction: {
-    label: "✏️ 英作文添削",
-    icon: "✏️",
-    desc: "書いた英文をAIが添削",
-    color: "#F5A623"
-  },
-  roleplay: {
-    label: "🎭 ロールプレイ",
-    icon: "🎭",
-    desc: "場面設定で実践的な会話練習",
-    color: "#C0397A"
-  },
-  quiz: {
-    label: "🧠 クイズ",
-    icon: "🧠",
-    desc: "スクリプトの単語・内容クイズ",
-    color: "#8B5CF6"
-  }
+  free:         { label: "💬 自由質問",   icon: "💬", desc: "単語・文法・発音など何でも聞く",     color: "#3A6FD8" },
+  conversation: { label: "🗣️ 英会話練習", icon: "🗣️", desc: "AIと英語で会話練習",               color: "#27AE60" },
+  correction:   { label: "✏️ 英作文添削", icon: "✏️", desc: "書いた英文をAIが添削",             color: "#F5A623" },
+  roleplay:     { label: "🎭 ロールプレイ",icon: "🎭", desc: "場面設定で実践的な会話練習",       color: "#C0397A" },
+  quiz:         { label: "🧠 クイズ",     icon: "🧠", desc: "スクリプトの単語・内容クイズ",     color: "#8B5CF6" }
 };
 
 // ─── AI API ──────────────────────────────────────────────────────────────────
@@ -66,62 +60,70 @@ async function callAI(messages, systemPrompt, maxTokens = 1000) {
 
 function getSystemPrompt(mode, lesson) {
   const base = `スクリプトタイトル: ${lesson.title}\nスクリプト本文:\n${lesson.fullText}`;
-
   const prompts = {
-    free: `あなたは親切な英語学習アシスタントです。
-${base}
-
-このスクリプトを学習している日本人をサポートしてください。
-- 質問には日本語で丁寧に答える
-- 単語・フレーズは「意味」「使い方」「例文」の形で説明
-- 発音のコツや覚え方も積極的に提供
-- 返答は簡潔にわかりやすく`,
-
-    conversation: `あなたはフレンドリーな英会話の練習相手です。
-${base}
-
-ルール:
-- 必ず英語で返答する
-- 相手の英語に間違いがあれば、会話の最後にさりげなく正しい表現を()内に示す
-- 上記スクリプトのトピック（旅行・ファッション）に関連した話題で会話する
-- 難しい単語を使ったら日本語訳を[]内に添える
-- 返答は2〜3文程度で簡潔に
-- 最後に必ず相手への質問を1つ加えて会話を続ける`,
-
-    correction: `あなたは英語の先生です。
-${base}
-
-ルール:
-- ユーザーが書いた英文を添削する
-- 間違いがあれば「❌ 原文」→「✅ 修正」の形で示す
-- 間違いの理由を日本語で簡潔に説明する
-- 良い表現は「👍 良い点」として褒める
-- より自然な言い回しがあれば提案する
-- 文法的に正しくても不自然な場合も指摘する`,
-
-    roleplay: `あなたは英会話のロールプレイ相手です。
-${base}
-
-現在のシナリオに応じて、リアルな英語で対話してください。
-- 必ず英語で返答する
-- ネイティブが実際に使う自然な表現を使う
-- 相手が詰まったら日本語でヒントを[]内に提供する
-- シナリオに沿った自然な流れで会話を進める`,
-
-    quiz: `あなたは英語クイズの出題者です。
-${base}
-
-ルール:
-- 上記スクリプトの単語・フレーズ・内容に関するクイズを出す
-- 問題形式: 穴埋め・日本語→英語・意味を答える など
-- 1問ずつ出題し、答えを待つ
-- 正解・不正解に関わらず解説を加える
-- 正解なら褒めて次の問題へ
-- 不正解なら正解を教えて覚え方のヒントを添える
-- 日本語で進行する`
+    free: `あなたは親切な英語学習アシスタントです。\n${base}\nこのスクリプトを学習している日本人をサポートしてください。\n- 質問には日本語で丁寧に答える\n- 単語・フレーズは「意味」「使い方」「例文」の形で説明\n- 発音のコツや覚え方も積極的に提供\n- 返答は簡潔にわかりやすく`,
+    conversation: `あなたはフレンドリーな英会話の練習相手です。\n${base}\nルール:\n- 必ず英語で返答する\n- 相手の英語に間違いがあれば、会話の最後にさりげなく正しい表現を()内に示す\n- 難しい単語を使ったら日本語訳を[]内に添える\n- 返答は2〜3文程度で簡潔に\n- 最後に必ず相手への質問を1つ加えて会話を続ける`,
+    correction: `あなたは英語の先生です。\n${base}\nルール:\n- ユーザーが書いた英文を添削する\n- 間違いがあれば「❌ 原文」→「✅ 修正」の形で示す\n- 間違いの理由を日本語で簡潔に説明する\n- 良い表現は「👍 良い点」として褒める\n- より自然な言い回しがあれば提案する`,
+    roleplay: `あなたは英会話のロールプレイ相手です。\n${base}\n現在のシナリオに応じて、リアルな英語で対話してください。\n- 必ず英語で返答する\n- ネイティブが実際に使う自然な表現を使う\n- 相手が詰まったら日本語でヒントを[]内に提供する`,
+    quiz: `あなたは英語クイズの出題者です。\n${base}\nルール:\n- 上記スクリプトの単語・フレーズ・内容に関するクイズを出す\n- 1問ずつ出題し、答えを待つ\n- 正解・不正解に関わらず解説を加える\n- 日本語で進行する`
   };
-
   return prompts[mode] || prompts.free;
+}
+
+// ─── スクリプト自動生成 ───────────────────────────────────────────────────────
+async function generateLesson(userInput) {
+  const systemPrompt = `あなたは英語学習コンテンツ作成の専門家です。
+ユーザーが日本語で話した内容をもとに、英語学習用のスクリプトデータを作成してください。
+
+以下のJSON形式で返答してください。JSON以外は一切出力しないでください：
+
+{
+  "id": "lesson_[英語の短いID例:music]",
+  "title": "🎵 [英語タイトル]",
+  "theme": {
+    "primary": "#[6桁カラーコード]",
+    "secondary": "#[6桁カラーコード]",
+    "bg1": "#1a1a2e",
+    "bg2": "#16213e",
+    "bg3": "#0f3460",
+    "slash": "#[6桁カラーコード]",
+    "vocabBg": "#[薄い背景色]",
+    "vocabBorder": "#[濃いボーダー色]",
+    "vocabText": "#[テキスト色]",
+    "phraseBg": "#[薄い背景色2]",
+    "phraseBorder": "#[濃いボーダー色2]",
+    "phraseText": "#[テキスト色2]"
+  },
+  "fullText": "[英語スクリプト全文。約150〜200語]",
+  "sentences": [
+    {
+      "id": 0,
+      "ja": "[日本語訳]",
+      "chunks": [
+        {"w": "[単語やフレーズ]", "t": "normal|vocab|phrase|slash", "pron": "[カタカナ読み（vocab/phraseのみ）]", "ipa": "[IPA発音記号（vocab/phraseのみ）]", "meaning": "[日本語の意味（vocab/phraseのみ）]", "example": "[例文（vocab/phraseのみ）]"}
+      ]
+    }
+  ]
+}
+
+ルール：
+- sentences は10〜14文程度
+- 各文のchunksは意味のまとまりで区切る
+- スラッシュリーディング用に適切な位置に {"w": " /", "t": "slash"} を挿入
+- vocab（単語）とphrase（フレーズ）を各文に1〜2個含める
+- 重要な単語・フレーズにはpron・ipa・meaning・exampleを必ず記入
+- normalとslashにはpron等は不要
+- themeは話題に合った色を選ぶ`;
+
+  const messages = [{ role: "user", parts: [{ text: userInput }] }];
+  const reply = await callAI(messages, systemPrompt, 3000);
+
+  try {
+    const clean = reply.replace(/```json/g, "").replace(/```/g, "").trim();
+    return JSON.parse(clean);
+  } catch (e) {
+    return null;
+  }
 }
 
 // ─── SPEECH ──────────────────────────────────────────────────────────────────
@@ -138,11 +140,7 @@ function speakWord(text) {
 
 function toggleFullPlay() {
   if (!currentLesson) return;
-  if (playing) {
-    window.speechSynthesis.cancel();
-    setPlaying(false);
-    return;
-  }
+  if (playing) { window.speechSynthesis.cancel(); setPlaying(false); return; }
   const u = new SpeechSynthesisUtterance(currentLesson.fullText);
   u.lang = "en-US"; u.rate = 0.88; u.pitch = 1.05;
   const voices = window.speechSynthesis.getVoices();
@@ -157,8 +155,7 @@ function toggleFullPlay() {
     if (bar) bar.style.width = Math.min(100, ((Date.now() - start) / dur) * 100) + "%";
   }, 100);
   u.onend = u.onerror = () => {
-    setPlaying(false);
-    clearInterval(progressInterval);
+    setPlaying(false); clearInterval(progressInterval);
     if (bar) { bar.style.width = "100%"; setTimeout(() => { bar.style.width = "0%"; }, 800); }
   };
   window.speechSynthesis.speak(u);
@@ -189,29 +186,21 @@ function getAllItems(lesson) {
 }
 
 function escHtml(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
 function renderChunk(chunk, lesson) {
   const tc = getTC(lesson);
   if (chunk.t === "normal") return `<span>${escHtml(chunk.w)}</span>`;
-  if (chunk.t === "slash") {
-    return showSlash
-      ? `<span class="slash-mark">/</span>`
-      : `<span style="visibility:hidden"> </span>`;
-  }
+  if (chunk.t === "slash") return showSlash ? `<span class="slash-mark">/</span>` : `<span style="visibility:hidden"> </span>`;
   const c = tc[chunk.t];
   const bm = bookmarks.has(chunk.w) ? '<sup class="bm-star">★</sup>' : "";
   const dataItem = escHtml(JSON.stringify(chunk));
   return `<mark class="chunk-mark" data-item="${dataItem}" style="background:${c.bg};color:${c.text};border-bottom:2.5px solid ${c.border}">${escHtml(chunk.w)}${bm}</mark>`;
 }
-
 // ─── HOME ────────────────────────────────────────────────────────────────────
 function renderHome() {
+  const lessons = getLessons();
   document.getElementById("app").innerHTML = `
     <div class="home-screen">
       <div class="home-header">
@@ -220,22 +209,136 @@ function renderHome() {
         <p class="home-sub">会話から生まれた英語スクリプトを学ぼう</p>
       </div>
       <div class="lesson-cards">
-        ${LESSONS.map(l => `
-          <button class="lesson-card" onclick="openLesson('${l.id}')" style="border-top:4px solid ${l.theme.primary}">
-            <div class="lesson-card-title">${l.title}</div>
-            <div class="lesson-card-meta">${l.sentences.length}文 · ${getAllItems(l).length}単語/フレーズ</div>
-            <div class="lesson-card-arrow" style="color:${l.theme.primary}">学習開始 →</div>
-          </button>
+        ${lessons.map(l => `
+          <div class="lesson-card-wrap">
+            <button class="lesson-card" onclick="openLesson('${l.id}')" style="border-top:4px solid ${l.theme.primary}">
+              <div class="lesson-card-title">${l.title}</div>
+              <div class="lesson-card-meta">${l.sentences.length}文 · ${getAllItems(l).length}単語/フレーズ</div>
+              <div class="lesson-card-arrow" style="color:${l.theme.primary}">学習開始 →</div>
+            </button>
+            ${l.custom ? `<button class="lesson-delete-btn" onclick="deleteLesson('${l.id}')">🗑️</button>` : ""}
+          </div>
         `).join("")}
       </div>
+      <button class="add-lesson-btn" onclick="renderCreateLesson()">
+        ➕ 新しいレッスンを作成
+      </button>
       <div class="home-footer">📁 アーカイブ：会話①タイ旅行 / 会話②ファッション</div>
     </div>`;
 }
 
+function deleteLesson(id) {
+  if (!confirm("このレッスンを削除しますか？")) return;
+  customLessons = customLessons.filter(l => l.id !== id);
+  saveCustomLessons(customLessons);
+  renderHome();
+}
+
+// ─── CREATE LESSON ────────────────────────────────────────────────────────────
+function renderCreateLesson() {
+  document.getElementById("app").innerHTML = `
+    <div class="home-screen">
+      <div class="create-header">
+        <button class="back-btn-home" onclick="renderHome()">← ホーム</button>
+        <h2 class="create-title">➕ 新しいレッスンを作成</h2>
+        <p class="create-sub">日本語で話した内容をAIが英語スクリプトに変換します</p>
+      </div>
+
+      <div class="create-examples">
+        <div class="create-example-title">💡 入力例</div>
+        <button class="example-btn" onclick="fillExample('私は音楽が大好きです。特にジャズが好きで、休日はよくライブに行きます。音楽は心を豊かにしてくれると思います。')">🎵 音楽について</button>
+        <button class="example-btn" onclick="fillExample('私は料理が趣味です。週末に新しいレシピに挑戦するのが楽しみです。特に和食と イタリアンが得意です。')">🍳 料理について</button>
+        <button class="example-btn" onclick="fillExample('私はランニングが好きです。毎朝30分走っています。マラソン大会にも出たことがあります。')">🏃 スポーツについて</button>
+      </div>
+
+      <div class="create-input-area">
+        <div class="create-input-label">あなたの話したい内容を日本語で入力</div>
+        <textarea id="lesson-input" class="lesson-textarea"
+          placeholder="例：私は旅行が好きで、特にヨーロッパに行きたいと思っています。フランスのパリやイタリアのローマに興味があります..."></textarea>
+      </div>
+
+      <button id="generate-btn" class="generate-btn" onclick="startGenerate()">
+        🤖 AIでスクリプトを生成する
+      </button>
+
+      <div id="generate-status" class="generate-status hidden"></div>
+      <div id="preview-area" class="hidden"></div>
+    </div>`;
+}
+
+function fillExample(text) {
+  const input = document.getElementById("lesson-input");
+  if (input) input.value = text;
+}
+
+async function startGenerate() {
+  const input = document.getElementById("lesson-input");
+  const btn = document.getElementById("generate-btn");
+  const status = document.getElementById("generate-status");
+
+  if (!input || !input.value.trim()) {
+    alert("内容を入力してください");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "⏳ 生成中...";
+  status.classList.remove("hidden");
+  status.innerHTML = `
+    <div class="generating">
+      <div class="generating-icon">🤖</div>
+      <div class="generating-text">AIがスクリプトを生成中です...<br>少々お待ちください（10〜20秒）</div>
+    </div>`;
+
+  const lesson = await generateLesson(input.value.trim());
+
+  if (!lesson) {
+    status.innerHTML = `<div class="generate-error">❌ 生成に失敗しました。もう一度試してください。</div>`;
+    btn.disabled = false;
+    btn.textContent = "🤖 AIでスクリプトを生成する";
+    return;
+  }
+
+  lesson.custom = true;
+  showPreview(lesson);
+  btn.disabled = false;
+  btn.textContent = "🤖 AIでスクリプトを生成する";
+  status.classList.add("hidden");
+}
+
+function showPreview(lesson) {
+  const preview = document.getElementById("preview-area");
+  preview.classList.remove("hidden");
+  preview.innerHTML = `
+    <div class="preview-card" style="border-top:4px solid ${lesson.theme.primary}">
+      <div class="preview-title">✅ 生成完了！</div>
+      <div class="preview-lesson-title">${lesson.title}</div>
+      <div class="preview-fulltext">${escHtml(lesson.fullText.substring(0, 150))}...</div>
+      <div class="preview-stats">${lesson.sentences.length}文 · ${getAllItems(lesson).length}単語/フレーズ</div>
+      <div class="preview-btns">
+        <button class="preview-save-btn" onclick="saveLesson(${escHtml(JSON.stringify(lesson))})" style="background:${lesson.theme.primary}">
+          💾 保存してレッスンに追加
+        </button>
+        <button class="preview-retry-btn" onclick="startGenerate()">
+          🔄 再生成
+        </button>
+      </div>
+    </div>`;
+}
+
+function saveLesson(lesson) {
+  if (typeof lesson === "string") lesson = JSON.parse(lesson);
+  lesson.id = "custom_" + Date.now();
+  lesson.custom = true;
+  customLessons.push(lesson);
+  saveCustomLessons(customLessons);
+  alert("✅ レッスンを保存しました！");
+  renderHome();
+}
+
 function openLesson(id) {
-  currentLesson = LESSONS.find(l => l.id === id);
+  currentLesson = getLessons().find(l => l.id === id);
   bookmarks = new Set();
-  aiChatHistory = [];
   practiceHistory = [];
   practiceMode = "free";
   currentTab = "script";
@@ -251,7 +354,6 @@ function renderLesson() {
 
   document.getElementById("app").innerHTML = `
     <div class="lesson-screen" style="background:linear-gradient(135deg,${l.theme.bg1},${l.theme.bg2},${l.theme.bg3})">
-
       <div class="lesson-header">
         <button class="back-btn" onclick="renderHome()">← ホーム</button>
         <div class="lesson-header-label" style="color:${l.theme.secondary}">English Learning App</div>
@@ -267,32 +369,23 @@ function renderLesson() {
           <div class="player-speed">EN 0.88x</div>
         </div>
       </div>
-
       <div class="tab-bar">
-        ${[
-          ["script","📄 スクリプト"],
-          ["list","📚 単語一覧"],
-          ["notebook",`★ 単語帳${bookmarks.size > 0 ? ` (${bookmarks.size})` : ""}`],
-          ["practice","🗣️ 英会話練習"]
-        ].map(([k,lb]) =>
+        ${[["script","📄 スクリプト"],["list","📚 単語一覧"],["notebook",`★ 単語帳${bookmarks.size>0?` (${bookmarks.size})`:""}`],["practice","🗣️ 英会話練習"]].map(([k,lb]) =>
           `<button class="tab-btn${currentTab===k?" active":""}" onclick="switchTab('${k}')">${lb}</button>`
         ).join("")}
       </div>
-
       <div class="tab-content" id="tab-content">
         ${renderTabContent(l, tc, allItems, bmItems)}
       </div>
     </div>
-
     <div id="popup-overlay" class="popup-overlay hidden" onclick="closePopup()"></div>
     <div id="popup-card" class="popup-card hidden"></div>
     <div id="flash-overlay" class="popup-overlay hidden" onclick="closeFlash()"></div>
-    <div id="flash-card" class="flash-card hidden"></div>
-  `;
+    <div id="flash-card" class="flash-card hidden"></div>`;
 
   document.querySelectorAll(".chunk-mark").forEach(el => {
     el.addEventListener("click", () => {
-      const item = JSON.parse(el.getAttribute("data-item").replace(/&quot;/g, '"'));
+      const item = JSON.parse(el.getAttribute("data-item").replace(/&quot;/g,'"'));
       openPopup(item);
     });
   });
@@ -306,7 +399,6 @@ function renderTabContent(l, tc, allItems, bmItems) {
   return "";
 }
 
-// ─── SCRIPT TAB ──────────────────────────────────────────────────────────────
 function renderScriptTab(l, tc) {
   return `
     <div class="controls-row">
@@ -317,10 +409,10 @@ function renderScriptTab(l, tc) {
       </div>
       <div class="toggle-btns">
         <button class="toggle-btn${showTrans?" on":""}" onclick="toggleTrans()" style="${showTrans?"color:#ffd060":""}">
-          ${showTrans ? "訳 表示中" : "訳 非表示"}
+          ${showTrans?"訳 表示中":"訳 非表示"}
         </button>
         <button class="toggle-btn${showSlash?" on":""}" onclick="toggleSlash()" style="${showSlash?`color:${l.theme.slash}`:""}">
-          ${showSlash ? "/ 表示中" : "/ 非表示"}
+          ${showSlash?"/ 表示中":"/ 非表示"}
         </button>
       </div>
     </div>
@@ -328,13 +420,11 @@ function renderScriptTab(l, tc) {
       ${l.sentences.map(s => `
         <div class="sentence-card" style="border-left:3px solid ${l.theme.primary}44">
           <div class="sentence-en">${s.chunks.map(c => renderChunk(c, l)).join("")}</div>
-          ${showTrans ? `<div class="sentence-ja">🇯🇵 ${escHtml(s.ja)}</div>` : ""}
-        </div>
-      `).join("")}
+          ${showTrans?`<div class="sentence-ja">🇯🇵 ${escHtml(s.ja)}</div>`:""}
+        </div>`).join("")}
     </div>`;
 }
 
-// ─── LIST TAB ────────────────────────────────────────────────────────────────
 function renderListTab(l, tc, allItems) {
   return `
     <div class="word-list">
@@ -348,8 +438,8 @@ function renderListTab(l, tc, allItems) {
                 <span class="word-badge" style="background:${c.bg};color:${c.text};border:1px solid ${c.border}">${c.label}</span>
                 <span class="word-title">${escHtml(item.w)}</span>
               </div>
-              <div class="word-pron">${escHtml(item.pron)} <span class="word-ipa">${escHtml(item.ipa)}</span></div>
-              <div class="word-meaning">${escHtml(item.meaning)}</div>
+              <div class="word-pron">${escHtml(item.pron||"")} <span class="word-ipa">${escHtml(item.ipa||"")}</span></div>
+              <div class="word-meaning">${escHtml(item.meaning||"")}</div>
             </div>
             <div class="word-card-actions">
               <button class="icon-btn" onclick="speakWord('${escHtml(item.w)}')">🔊</button>
@@ -360,7 +450,6 @@ function renderListTab(l, tc, allItems) {
     </div>`;
 }
 
-// ─── NOTEBOOK TAB ────────────────────────────────────────────────────────────
 function renderNotebookTab(l, tc, bmItems) {
   if (!bmItems.length) return `
     <div class="empty-state">
@@ -383,8 +472,8 @@ function renderNotebookTab(l, tc, bmItems) {
                 <span class="word-badge" style="background:${c.bg};color:${c.text};border:1px solid ${c.border}">${c.label}</span>
                 <span class="word-title">${escHtml(item.w)}</span>
               </div>
-              <div class="word-pron">${escHtml(item.pron)} <span class="word-ipa">${escHtml(item.ipa)}</span></div>
-              <div class="word-meaning">${escHtml(item.meaning)}</div>
+              <div class="word-pron">${escHtml(item.pron||"")} <span class="word-ipa">${escHtml(item.ipa||"")}</span></div>
+              <div class="word-meaning">${escHtml(item.meaning||"")}</div>
             </div>
             <div class="word-card-actions">
               <button class="icon-btn" onclick="speakWord('${escHtml(item.w)}')">🔊</button>
@@ -395,147 +484,72 @@ function renderNotebookTab(l, tc, bmItems) {
     </div>`;
 }
 
-// ─── PRACTICE TAB ────────────────────────────────────────────────────────────
 function renderPracticeTab(l) {
   const mode = PRACTICE_MODES[practiceMode];
   const isConversation = practiceMode === "conversation" || practiceMode === "roleplay";
-
-  // ロールプレイのシナリオ選択肢
-  const roleplayScenarios = [
-    "✈️ 空港でのチェックイン",
-    "🏨 ホテルのフロントで",
-    "🍽️ レストランで注文",
-    "🛍️ ショッピングで店員と会話",
-    "🗺️ 道を聞く・教える",
-    "👗 ファッションについて語る"
-  ];
-
+  const roleplayScenarios = ["✈️ 空港でのチェックイン","🏨 ホテルのフロントで","🍽️ レストランで注文","🛍️ ショッピングで店員と会話","🗺️ 道を聞く・教える","👗 ファッションについて語る"];
   return `
     <div class="practice-tab">
-
-      <!-- モード選択 -->
       <div class="practice-mode-grid">
-        ${Object.entries(PRACTICE_MODES).map(([key, m]) => `
-          <button class="practice-mode-btn${practiceMode===key?" active":""}"
-            onclick="selectPracticeMode('${key}')"
-            style="${practiceMode===key ? `background:${m.color};color:#fff;border-color:${m.color}` : ""}">
+        ${Object.entries(PRACTICE_MODES).map(([key,m]) => `
+          <button class="practice-mode-btn${practiceMode===key?" active":""}" onclick="selectPracticeMode('${key}')"
+            style="${practiceMode===key?`background:${m.color};color:#fff;border-color:${m.color}`:""}">
             <span class="practice-mode-icon">${m.icon}</span>
             <span class="practice-mode-label">${m.label.replace(m.icon+" ","")}</span>
-          </button>
-        `).join("")}
+          </button>`).join("")}
       </div>
-
-      <!-- モード説明 -->
       <div class="practice-desc" style="border-left:3px solid ${mode.color}">
         <strong>${mode.label}</strong>　${mode.desc}
-        ${practiceMode === "conversation" ? `<br><small style="color:rgba(255,255,255,0.5)">💡 英語で話しかけてみましょう！</small>` : ""}
-        ${practiceMode === "correction" ? `<br><small style="color:rgba(255,255,255,0.5)">💡 英文を入力すると添削します</small>` : ""}
-        ${practiceMode === "quiz" ? `<br><small style="color:rgba(255,255,255,0.5)">💡「スタート」と入力してクイズ開始</small>` : ""}
       </div>
-
-      <!-- ロールプレイ シナリオ選択 -->
-      ${practiceMode === "roleplay" ? `
+      ${practiceMode==="roleplay"?`
         <div class="scenario-list">
           <div class="scenario-title">🎭 シナリオを選んでください</div>
-          ${roleplayScenarios.map(s => `
-            <button class="scenario-btn" onclick="startRoleplay('${escHtml(s)}')">${s}</button>
-          `).join("")}
-        </div>
-      ` : ""}
-
-      <!-- チャット履歴 -->
+          ${roleplayScenarios.map(s=>`<button class="scenario-btn" onclick="startRoleplay('${escHtml(s)}')">${s}</button>`).join("")}
+        </div>`:""}
       <div id="practice-messages" class="ai-messages practice-messages">
-        ${practiceHistory.length === 0 ? `
-          <div class="practice-welcome">
-            ${mode.icon} ${getPracticeWelcome(practiceMode)}
-          </div>
-        ` : practiceHistory.map(m => `
-          <div class="ai-bubble ${m.role}">${escHtml(m.text)}</div>
-        `).join("")}
+        ${practiceHistory.length===0?`<div class="practice-welcome">${mode.icon} ${getPracticeWelcome(practiceMode)}</div>`:
+          practiceHistory.map(m=>`<div class="ai-bubble ${m.role}">${escHtml(m.text)}</div>`).join("")}
       </div>
-
-      <!-- 入力エリア -->
-      ${practiceMode !== "roleplay" || practiceHistory.length > 0 ? `
+      ${practiceMode!=="roleplay"||practiceHistory.length>0?`
         <div class="ai-input-row">
           <input id="practice-input" class="ai-input" type="text"
             placeholder="${getPracticePlaceholder(practiceMode)}"
             onkeydown="if(event.key==='Enter')sendPractice()">
           <button class="ai-send-btn" onclick="sendPractice()" style="background:${mode.color}">送信</button>
         </div>
-        ${isConversation ? `
-          <button class="speak-input-btn" onclick="speakMyInput()" style="color:${mode.color}">
-            🔊 AIの返答を読み上げる
-          </button>
-        ` : ""}
-      ` : ""}
-
-      <!-- リセットボタン -->
-      ${practiceHistory.length > 0 ? `
-        <button class="reset-practice-btn" onclick="resetPractice()">🔄 会話をリセット</button>
-      ` : ""}
+        ${isConversation?`<button class="speak-input-btn" onclick="speakMyInput()" style="color:${mode.color}">🔊 AIの返答を読み上げる</button>`:""}
+      `:""}
+      ${practiceHistory.length>0?`<button class="reset-practice-btn" onclick="resetPractice()">🔄 会話をリセット</button>`:""}
     </div>`;
 }
 
 function getPracticeWelcome(mode) {
-  const msgs = {
-    free: "スクリプトについて何でも聞いてください！",
-    conversation: "Let's practice English conversation!\nまず英語で話しかけてみてください 😊",
-    correction: "英文を入力してください。\n丁寧に添削します！",
-    roleplay: "シナリオを選んで会話練習を始めましょう！",
-    quiz: "「スタート」と入力してクイズを始めましょう！"
-  };
-  return msgs[mode] || "";
+  return { free:"スクリプトについて何でも聞いてください！", conversation:"Let's practice English conversation!\nまず英語で話しかけてみてください 😊", correction:"英文を入力してください。\n丁寧に添削します！", roleplay:"シナリオを選んで会話練習を始めましょう！", quiz:"「スタート」と入力してクイズを始めましょう！" }[mode]||"";
 }
 
 function getPracticePlaceholder(mode) {
-  const placeholders = {
-    free: "例：'goes back to' の使い方を教えて",
-    conversation: "Type in English...",
-    correction: "添削してほしい英文を入力...",
-    roleplay: "英語で話しかけてください...",
-    quiz: "「スタート」または答えを入力..."
-  };
-  return placeholders[mode] || "";
+  return { free:"例：'goes back to' の使い方を教えて", conversation:"Type in English...", correction:"添削してほしい英文を入力...", roleplay:"英語で話しかけてください...", quiz:"「スタート」または答えを入力..." }[mode]||"";
 }
 
 function selectPracticeMode(mode) {
-  practiceMode = mode;
-  practiceHistory = [];
-  renderLesson();
-  setTimeout(() => {
-    const msgs = document.getElementById("practice-messages");
-    if (msgs) msgs.scrollTop = msgs.scrollHeight;
-  }, 100);
+  practiceMode = mode; practiceHistory = []; renderLesson();
 }
 
 function startRoleplay(scenario) {
   practiceHistory = [];
-  // AIからシナリオ開始メッセージを取得
-  const systemPrompt = getSystemPrompt("roleplay", currentLesson) +
-    `\n\n現在のシナリオ: ${scenario}\nあなたからシナリオに合った役を演じて会話を始めてください。`;
-  addPracticeMessage("ai", "⏳ シナリオを準備中...");
-  renderPracticeMessages();
-
-  callAI(
-    [{ role: "user", parts: [{ text: `シナリオ「${scenario}」で会話練習を始めてください。あなたから話しかけてください。` }] }],
-    systemPrompt
-  ).then(reply => {
-    practiceHistory = [{ role: "ai", text: reply }];
-    renderLesson();
-    setTimeout(() => scrollPractice(), 100);
+  const systemPrompt = getSystemPrompt("roleplay", currentLesson) + `\n\n現在のシナリオ: ${scenario}\nあなたからシナリオに合った役を演じて会話を始めてください。`;
+  addPracticeMessage("ai","⏳ シナリオを準備中..."); renderPracticeMessages();
+  callAI([{role:"user",parts:[{text:`シナリオ「${scenario}」で会話練習を始めてください。`}]}], systemPrompt).then(reply => {
+    practiceHistory=[{role:"ai",text:reply}]; renderLesson(); setTimeout(()=>scrollPractice(),100);
   });
 }
 
-function addPracticeMessage(role, text) {
-  practiceHistory.push({ role, text });
-}
+function addPracticeMessage(role,text) { practiceHistory.push({role,text}); }
 
 function renderPracticeMessages() {
   const msgs = document.getElementById("practice-messages");
   if (!msgs) return;
-  msgs.innerHTML = practiceHistory.map(m =>
-    `<div class="ai-bubble ${m.role}">${escHtml(m.text)}</div>`
-  ).join("");
+  msgs.innerHTML = practiceHistory.map(m=>`<div class="ai-bubble ${m.role}">${escHtml(m.text)}</div>`).join("");
   scrollPractice();
 }
 
@@ -550,79 +564,37 @@ async function sendPractice() {
   const msg = input.value.trim();
   if (!msg) return;
   input.value = "";
-
-  addPracticeMessage("user", msg);
-  addPracticeMessage("ai", "考え中...");
+  addPracticeMessage("user",msg);
+  addPracticeMessage("ai","考え中...");
   renderPracticeMessages();
-
-  // 会話履歴をAI形式に変換
-  const messages = practiceHistory
-    .filter(m => m.text !== "考え中...")
-    .slice(0, -1) // 最後のuserメッセージは別で渡す
-    .map(m => ({
-      role: m.role === "user" ? "user" : "model",
-      parts: [{ text: m.text }]
-    }));
-  messages.push({ role: "user", parts: [{ text: msg }] });
-
-  const systemPrompt = getSystemPrompt(practiceMode, currentLesson);
-  const reply = await callAI(messages, systemPrompt);
-
-  // 「考え中...」を置き換え
-  const idx = practiceHistory.findLastIndex(m => m.text === "考え中...");
-  if (idx !== -1) practiceHistory[idx] = { role: "ai", text: reply };
-
+  const messages = practiceHistory.filter(m=>m.text!=="考え中...").slice(0,-1).map(m=>({role:m.role==="user"?"user":"model",parts:[{text:m.text}]}));
+  messages.push({role:"user",parts:[{text:msg}]});
+  const reply = await callAI(messages, getSystemPrompt(practiceMode,currentLesson));
+  const idx = practiceHistory.findLastIndex(m=>m.text==="考え中...");
+  if (idx!==-1) practiceHistory[idx]={role:"ai",text:reply};
   renderPracticeMessages();
-
-  // 英会話・ロールプレイモードはAIの返答を自動読み上げ
-  if (practiceMode === "conversation" || practiceMode === "roleplay") {
-    const englishOnly = reply.replace(/\[.*?\]/g, "").replace(/\(.*?\)/g, "");
-    speakWord(englishOnly);
-  }
+  if (practiceMode==="conversation"||practiceMode==="roleplay") speakWord(reply.replace(/\[.*?\]/g,"").replace(/\(.*?\)/g,""));
 }
 
 function speakMyInput() {
-  // 最後のAIメッセージを読み上げ
-  const lastAI = [...practiceHistory].reverse().find(m => m.role === "ai");
-  if (lastAI) {
-    const englishOnly = lastAI.text.replace(/\[.*?\]/g, "").replace(/\(.*?\)/g, "");
-    speakWord(englishOnly);
-  }
+  const lastAI=[...practiceHistory].reverse().find(m=>m.role==="ai");
+  if (lastAI) speakWord(lastAI.text.replace(/\[.*?\]/g,"").replace(/\(.*?\)/g,""));
 }
 
-function resetPractice() {
-  practiceHistory = [];
-  renderLesson();
-}
+function resetPractice() { practiceHistory=[]; renderLesson(); }
 
-// ─── TABS ────────────────────────────────────────────────────────────────────
-function switchTab(tab) {
-  currentTab = tab;
-  renderLesson();
-  window.scrollTo(0, 0);
-}
-function toggleTrans() { showTrans = !showTrans; renderLesson(); }
-function toggleSlash() { showSlash = !showSlash; renderLesson(); }
+function switchTab(tab) { currentTab=tab; renderLesson(); window.scrollTo(0,0); }
+function toggleTrans() { showTrans=!showTrans; renderLesson(); }
+function toggleSlash() { showSlash=!showSlash; renderLesson(); }
+function toggleBookmark(word) { bookmarks.has(word)?bookmarks.delete(word):bookmarks.add(word); renderLesson(); }
 
-// ─── BOOKMARK ────────────────────────────────────────────────────────────────
-function toggleBookmark(word) {
-  bookmarks.has(word) ? bookmarks.delete(word) : bookmarks.add(word);
-  renderLesson();
-}
-
-// ─── POPUP ───────────────────────────────────────────────────────────────────
 function openPopup(item) {
-  if (typeof item === "string") item = JSON.parse(item);
-  const l = currentLesson;
-  const tc = getTC(l);
-  const c = tc[item.t];
-  const bm = bookmarks.has(item.w);
-  const overlay = document.getElementById("popup-overlay");
-  const card = document.getElementById("popup-card");
-  overlay.classList.remove("hidden");
-  card.classList.remove("hidden");
-  card.style.borderTop = `6px solid ${c.border}`;
-  card.innerHTML = `
+  if (typeof item==="string") item=JSON.parse(item);
+  const l=currentLesson, tc=getTC(l), c=tc[item.t], bm=bookmarks.has(item.w);
+  const overlay=document.getElementById("popup-overlay"), card=document.getElementById("popup-card");
+  overlay.classList.remove("hidden"); card.classList.remove("hidden");
+  card.style.borderTop=`6px solid ${c.border}`;
+  card.innerHTML=`
     <div class="popup-header">
       <span class="word-badge" style="background:${c.bg};color:${c.text};border:1px solid ${c.border}">${c.label}</span>
       <button class="bm-popup-btn" onclick="toggleBookmarkPopup('${escHtml(item.w)}')" style="color:${bm?"#F5A623":"#ccc"}">${bm?"★":"☆"}</button>
@@ -631,26 +603,25 @@ function openPopup(item) {
       <div class="popup-word">"${escHtml(item.w)}"</div>
       <button class="popup-speak-btn" onclick="speakWord('${escHtml(item.w)}')" style="background:${c.border}">🔊</button>
     </div>
-    <div class="popup-pron">カタカナ: <strong>${escHtml(item.pron)}</strong></div>
-    <div class="popup-ipa">${escHtml(item.ipa)}</div>
-    <div class="popup-meaning">🇯🇵 ${escHtml(item.meaning)}</div>
+    <div class="popup-pron">カタカナ: <strong>${escHtml(item.pron||"")}</strong></div>
+    <div class="popup-ipa">${escHtml(item.ipa||"")}</div>
+    <div class="popup-meaning">🇯🇵 ${escHtml(item.meaning||"")}</div>
     <div class="popup-example">
       <div class="popup-example-label">例文</div>
-      <div class="popup-example-text">${escHtml(item.example)}</div>
+      <div class="popup-example-text">${escHtml(item.example||"")}</div>
     </div>
-    ${bm ? `<div class="popup-bm-note">★ 単語帳に登録済み</div>` : ""}
+    ${bm?`<div class="popup-bm-note">★ 単語帳に登録済み</div>`:""}
     <button class="popup-close-btn" onclick="closePopup()" style="background:${c.border}">閉じる</button>`;
 }
 
 function toggleBookmarkPopup(word) {
-  bookmarks.has(word) ? bookmarks.delete(word) : bookmarks.add(word);
-  const bm = bookmarks.has(word);
-  const btn = document.querySelector(".bm-popup-btn");
-  if (btn) { btn.textContent = bm ? "★" : "☆"; btn.style.color = bm ? "#F5A623" : "#ccc"; }
-  const note = document.querySelector(".popup-bm-note");
-  if (bm && !note) {
-    document.querySelector(".popup-close-btn").insertAdjacentHTML("beforebegin", `<div class="popup-bm-note">★ 単語帳に登録済み</div>`);
-  } else if (!bm && note) { note.remove(); }
+  bookmarks.has(word)?bookmarks.delete(word):bookmarks.add(word);
+  const bm=bookmarks.has(word);
+  const btn=document.querySelector(".bm-popup-btn");
+  if (btn){btn.textContent=bm?"★":"☆";btn.style.color=bm?"#F5A623":"#ccc";}
+  const note=document.querySelector(".popup-bm-note");
+  if (bm&&!note) document.querySelector(".popup-close-btn").insertAdjacentHTML("beforebegin",`<div class="popup-bm-note">★ 単語帳に登録済み</div>`);
+  else if (!bm&&note) note.remove();
 }
 
 function closePopup() {
@@ -658,72 +629,43 @@ function closePopup() {
   document.getElementById("popup-card").classList.add("hidden");
 }
 
-// ─── FLASHCARD ────────────────────────────────────────────────────────────────
-let flashIdx = 0, flashFlipped = false, flashResults = [];
+let flashIdx=0, flashFlipped=false, flashResults=[];
 
-function startFlash() {
-  flashIdx = 0; flashFlipped = false; flashResults = [];
-  renderFlash();
-}
+function startFlash() { flashIdx=0; flashFlipped=false; flashResults=[]; renderFlash(); }
 
 function renderFlash() {
-  const l = currentLesson;
-  const tc = getTC(l);
-  const items = getAllItems(l).filter(x => bookmarks.has(x.w));
-  const overlay = document.getElementById("flash-overlay");
-  const card = document.getElementById("flash-card");
-  overlay.classList.remove("hidden");
-  card.classList.remove("hidden");
-
-  if (flashIdx >= items.length) {
-    const ok = flashResults.filter(r => r === "ok").length;
-    card.innerHTML = `
-      <div class="flash-done">
-        <div class="flash-done-icon">🎉</div>
-        <div class="flash-done-title">完了！</div>
-        <div class="flash-done-score">${items.length}問中 <strong style="color:${l.theme.primary}">${ok}問</strong> 正解</div>
-        <div class="flash-done-btns">
-          <button onclick="startFlash()" style="background:${l.theme.primary}">もう一度</button>
-          <button onclick="closeFlash()" style="background:#888">閉じる</button>
-        </div>
-      </div>`;
+  const l=currentLesson, tc=getTC(l), items=getAllItems(l).filter(x=>bookmarks.has(x.w));
+  const overlay=document.getElementById("flash-overlay"), card=document.getElementById("flash-card");
+  overlay.classList.remove("hidden"); card.classList.remove("hidden");
+  if (flashIdx>=items.length) {
+    const ok=flashResults.filter(r=>r==="ok").length;
+    card.innerHTML=`<div class="flash-done"><div class="flash-done-icon">🎉</div><div class="flash-done-title">完了！</div><div class="flash-done-score">${items.length}問中 <strong style="color:${l.theme.primary}">${ok}問</strong> 正解</div><div class="flash-done-btns"><button onclick="startFlash()" style="background:${l.theme.primary}">もう一度</button><button onclick="closeFlash()" style="background:#888">閉じる</button></div></div>`;
     return;
   }
-
-  const item = items[flashIdx];
-  const c = tc[item.t];
-  card.innerHTML = `
+  const item=items[flashIdx], c=tc[item.t];
+  card.innerHTML=`
     <div class="flash-counter">${flashIdx+1} / ${items.length}</div>
     <div class="flash-face${flashFlipped?" flipped":""}" onclick="flipCard()"
-      style="background:${flashFlipped ? c.bg : `linear-gradient(135deg,${l.theme.bg1},${l.theme.bg3})`};border:2px solid ${flashFlipped?c.border:"transparent"}">
+      style="background:${flashFlipped?c.bg:`linear-gradient(135deg,${l.theme.bg1},${l.theme.bg3})`};border:2px solid ${flashFlipped?c.border:"transparent"}">
       <div class="flash-face-word" style="color:${flashFlipped?c.text:"#fff"}">${escHtml(item.w)}</div>
-      ${flashFlipped ? `
-        <button onclick="event.stopPropagation();speakWord('${escHtml(item.w)}')"
-          style="margin-top:8px;background:${c.border};border:none;border-radius:99px;padding:4px 12px;color:#fff;font-weight:700;font-size:12px;cursor:pointer">
-          🔊 発音
-        </button>
-        <div class="flash-face-ipa">${escHtml(item.ipa)}</div>
-        <div class="flash-face-pron">${escHtml(item.pron)}</div>
-        <div class="flash-face-meaning">${escHtml(item.meaning)}</div>
-      ` : `<div class="flash-face-hint">タップして答えを見る</div>`}
+      ${flashFlipped?`
+        <button onclick="event.stopPropagation();speakWord('${escHtml(item.w)}')" style="margin-top:8px;background:${c.border};border:none;border-radius:99px;padding:4px 12px;color:#fff;font-weight:700;font-size:12px;cursor:pointer">🔊 発音</button>
+        <div class="flash-face-ipa">${escHtml(item.ipa||"")}</div>
+        <div class="flash-face-pron">${escHtml(item.pron||"")}</div>
+        <div class="flash-face-meaning">${escHtml(item.meaning||"")}</div>
+      `:`<div class="flash-face-hint">タップして答えを見る</div>`}
     </div>
-    ${flashFlipped ? `
-      <div class="flash-btns">
-        <button onclick="answerFlash('ng')" style="background:#e74c3c">😓 もう一度</button>
-        <button onclick="answerFlash('ok')" style="background:#27AE60">✅ 覚えた！</button>
-      </div>` : ""}`;
+    ${flashFlipped?`<div class="flash-btns"><button onclick="answerFlash('ng')" style="background:#e74c3c">😓 もう一度</button><button onclick="answerFlash('ok')" style="background:#27AE60">✅ 覚えた！</button></div>`:""}`;
 }
 
-function flipCard() { flashFlipped = true; renderFlash(); }
-function answerFlash(r) { flashResults.push(r); flashIdx++; flashFlipped = false; renderFlash(); }
+function flipCard() { flashFlipped=true; renderFlash(); }
+function answerFlash(r) { flashResults.push(r); flashIdx++; flashFlipped=false; renderFlash(); }
 function closeFlash() {
   document.getElementById("flash-overlay").classList.add("hidden");
   document.getElementById("flash-card").classList.add("hidden");
 }
 
-// ─── INIT ────────────────────────────────────────────────────────────────────
 window.addEventListener("load", () => {
   window.speechSynthesis?.getVoices();
   renderHome();
 });
-

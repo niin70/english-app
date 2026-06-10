@@ -75,56 +75,73 @@ async function generateLesson(userInput) {
   const systemPrompt = `あなたは英語学習コンテンツ作成の専門家です。
 ユーザーが日本語で話した内容をもとに、英語学習用のスクリプトデータを作成してください。
 
+【重要】スクリプトは以下の2部構成にしてください：
+1. ユーザー自身のスピーチ（自己紹介・意見・経験を英語で述べる）約8文
+2. ネイティブとの自然な会話のやり取り（2〜3往復）約6文
+   - ネイティブからの質問や反応
+   - ユーザーの返答
+   - さらなる深掘り会話
+
+話題に最も合う絵文字を1つ選んでtitleの先頭に入れてください。
+例：音楽→🎵、料理→🍳、旅行→✈️、スポーツ→⚽、ファッション→👗、健康→💪、映画→🎬、仕事→💼など
+
 以下のJSON形式で返答してください。JSON以外は一切出力しないでください：
 
 {
-  "id": "lesson_[英語の短いID例:music]",
-  "title": "🎵 [英語タイトル]",
+  "id": "lesson_[英語の短いID]",
+  "title": "[絵文字] [英語タイトル]",
   "theme": {
-    "primary": "#[6桁カラーコード]",
-    "secondary": "#[6桁カラーコード]",
-    "bg1": "#1a1a2e",
-    "bg2": "#16213e",
-    "bg3": "#0f3460",
-    "slash": "#[6桁カラーコード]",
-    "vocabBg": "#[薄い背景色]",
-    "vocabBorder": "#[濃いボーダー色]",
-    "vocabText": "#[テキスト色]",
-    "phraseBg": "#[薄い背景色2]",
-    "phraseBorder": "#[濃いボーダー色2]",
-    "phraseText": "#[テキスト色2]"
+    "primary": "#[話題に合った色]",
+    "secondary": "#[補色]",
+    "bg1": "#f9f5f2",
+    "bg2": "#eef3f6",
+    "bg3": "#f5f0ee",
+    "slash": "#567B89",
+    "vocabBg": "#FFF3E0",
+    "vocabBorder": "#CDA69A",
+    "vocabText": "#7A4A35",
+    "phraseBg": "#E8F4F0",
+    "phraseBorder": "#567B89",
+    "phraseText": "#1A4A3A"
   },
-  "fullText": "[英語スクリプト全文。約150〜200語]",
+  "fullText": "[スクリプト全文。Part1とPart2を含む自然な英文]",
   "sentences": [
     {
       "id": 0,
       "ja": "[日本語訳]",
       "chunks": [
-        {"w": "[単語やフレーズ]", "t": "normal|vocab|phrase|slash", "pron": "[カタカナ読み（vocab/phraseのみ）]", "ipa": "[IPA発音記号（vocab/phraseのみ）]", "meaning": "[日本語の意味（vocab/phraseのみ）]", "example": "[例文（vocab/phraseのみ）]"}
+        {"w": "[テキスト]", "t": "normal"},
+        {"w": " /", "t": "slash"},
+        {"w": "[重要単語]", "t": "vocab", "pron": "[カタカナ]", "ipa": "[IPA]", "meaning": "[意味]", "example": "[例文]"},
+        {"w": "[重要フレーズ]", "t": "phrase", "pron": "[カタカナ]", "ipa": "[IPA]", "meaning": "[意味]", "example": "[例文]"}
       ]
     }
   ]
 }
 
-ルール：
-- sentences は10〜14文程度
-- 各文のchunksは意味のまとまりで区切る
-- スラッシュリーディング用に適切な位置に {"w": " /", "t": "slash"} を挿入
-- vocab（単語）とphrase（フレーズ）を各文に1〜2個含める
-- 重要な単語・フレーズにはpron・ipa・meaning・exampleを必ず記入
-- normalとslashにはpron等は不要
-- themeは話題に合った色を選ぶ`;
+単語・フレーズ選定のルール：
+- 各文に必ず1〜2個のvocabまたはphraseを含める
+- ネイティブがよく使う自然な表現を優先して選ぶ
+- 以下のような表現を積極的に選ぶ：
+  * 慣用句・イディオム（例："I'm into", "it hits different", "no wonder"）
+  * 便利なフレーズ（例："to be honest", "what I love about", "the thing is"）
+  * 感情を表す生き生きとした表現
+  * 会話でよく使うつなぎ言葉
+- sentences は14〜16文程度（Part1: 8文、Part2: 6〜8文）
+- Part2の会話部分には話者を示す prefix を ja に入れる（例：「【あなた】〜」「【ネイティブ】〜」）`;
 
-  const messages = [{ role: "user", parts: [{ text: userInput }] }];
-  const reply = await callAI(messages, systemPrompt, 3000);
+  const messages = [{ role: "user", parts: [{ text: `以下の内容で英語学習スクリプトを作成してください：\n\n${userInput}` }] }];
+  const reply = await callAI(messages, systemPrompt, 4000);
 
   try {
     const clean = reply.replace(/```json/g, "").replace(/```/g, "").trim();
     return JSON.parse(clean);
   } catch (e) {
+    console.error("JSON parse error:", e, reply);
     return null;
   }
 }
+
 
 // ─── SPEECH ──────────────────────────────────────────────────────────────────
 function speakWord(text) {

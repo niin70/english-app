@@ -3,7 +3,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: "APIキーが設定されていません。Vercelの環境変数を確認してください。" });
   }
@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const openaiMessages = [
+    const groqMessages = [
       { role: "system", content: systemPrompt },
       ...messages.map(m => ({
         role: m.role === "model" ? "assistant" : m.role,
@@ -22,15 +22,15 @@ export default async function handler(req, res) {
       }))
     ];
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: openaiMessages,
+        model: "llama-3.3-70b-versatile",
+        messages: groqMessages,
         max_tokens: maxTokens || 1000,
         temperature: 0.8
       })
@@ -46,4 +46,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: `通信エラー: ${err.message}` });
   }
 }
-

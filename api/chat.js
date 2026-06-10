@@ -5,7 +5,7 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: "APIキーが設定されていません。Vercelの環境変数を確認してください。" });
+    return res.status(500).json({ error: "APIキーが設定されていません。" });
   }
 
   const { messages, systemPrompt, maxTokens } = req.body;
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: openaiMessages,
-        max_tokens: maxTokens || 1000,
+        max_tokens: maxTokens || 2000,
         temperature: 0.8
       })
     });

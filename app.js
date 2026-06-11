@@ -9,10 +9,8 @@ let progressInterval = null;
 let practiceMode = "free";
 let practiceHistory = [];
 
-// ローカルストレージのキー
 const STORAGE_KEY = "english_app_custom_lessons";
 
-// カスタムレッスンをローカルストレージから読み込む
 function loadCustomLessons() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -20,7 +18,6 @@ function loadCustomLessons() {
   } catch (e) { return []; }
 }
 
-// カスタムレッスンをローカルストレージに保存
 function saveCustomLessons(lessons) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(lessons));
@@ -33,16 +30,14 @@ function getLessons() {
   return [THAILAND_LESSON, FASHION_LESSON, ...customLessons];
 }
 
-// ─── PRACTICE MODES ──────────────────────────────────────────────────────────
 const PRACTICE_MODES = {
-  free:         { label: "💬 自由質問",   icon: "💬", desc: "単語・文法・発音など何でも聞く",     color: "#3A6FD8" },
-  conversation: { label: "🗣️ 英会話練習", icon: "🗣️", desc: "AIと英語で会話練習",               color: "#27AE60" },
-  correction:   { label: "✏️ 英作文添削", icon: "✏️", desc: "書いた英文をAIが添削",             color: "#F5A623" },
-  roleplay:     { label: "🎭 ロールプレイ",icon: "🎭", desc: "場面設定で実践的な会話練習",       color: "#C0397A" },
-  quiz:         { label: "🧠 クイズ",     icon: "🧠", desc: "スクリプトの単語・内容クイズ",     color: "#8B5CF6" }
+  free:         { label: "💬 自由質問",    icon: "💬", desc: "単語・文法・発音など何でも聞く",   color: "#3A6FD8" },
+  conversation: { label: "🗣️ 英会話練習",  icon: "🗣️", desc: "AIと英語で会話練習",             color: "#27AE60" },
+  correction:   { label: "✏️ 英作文添削",  icon: "✏️", desc: "書いた英文をAIが添削",           color: "#F5A623" },
+  roleplay:     { label: "🎭 ロールプレイ", icon: "🎭", desc: "場面設定で実践的な会話練習",     color: "#C0397A" },
+  quiz:         { label: "🧠 クイズ",      icon: "🧠", desc: "スクリプトの単語・内容クイズ",   color: "#8B5CF6" }
 };
 
-// ─── AI API ──────────────────────────────────────────────────────────────────
 async function callAI(messages, systemPrompt, maxTokens = 1000) {
   try {
     const res = await fetch("/api/chat", {
@@ -70,7 +65,6 @@ function getSystemPrompt(mode, lesson) {
   return prompts[mode] || prompts.free;
 }
 
-// ─── スクリプト自動生成 ───────────────────────────────────────────────────────
 async function generateLesson(userInput) {
   const systemPrompt = `あなたは英語学習コンテンツ作成の専門家です。
 
@@ -92,24 +86,19 @@ Part 2の各文のja（日本語訳）には必ず【あなた】または【ネ
 
 【単語・フレーズ選定の厳格なルール】
 絶対に選ばないもの：
-- 人名（Jenny、Gossip Girlなど）
-- 地名・固有名詞
+- 人名・地名・固有名詞
 - 誰でも知っている簡単な単語（good、like、very、want など）
 
 必ず選ぶもの（英会話で役立つ表現）：
-vocab（単語）の例：
-- stunning、gorgeous、sophisticated、overwhelming
-- indulge、resonate、spontaneous、compelling
-- dedicate、transform、genuinely、obsessed
+vocab（単語）の例：stunning、sophisticated、overwhelming、indulge、resonate、compelling、dedicate、transform、genuinely、obsessed
+phrase（フレーズ）の例："to be honest"、"what I love about"、"the thing is"、"I can't help but"、"no wonder"、"I'm totally into"、"it really hits different"、"ever since"
 
-phrase（フレーズ）の例：
-- "to be honest"、"what I love about"、"the thing is"
-- "I can't help but"、"it means a lot to me"、"no wonder"
-- "I'm totally into"、"it really hits different"、"I have to say"
-- "ever since"、"what really got me was"、"I can relate to that"
-
-各文に必ずvocabかphraseを1〜2個含めること。
-全体で vocab 8個以上、phrase 6個以上含めること。
+【chunksの組み立てルール】
+- スラッシュ {"w": " /", "t": "slash"} は文の途中・意味のかたまりの区切りにのみ入れる
+- 文末にスラッシュを置いてはいけない
+- vocab・phraseは必ず文の途中に配置する
+- chunksの最後の要素は必ずnormalで句読点（"." "?" "!"）にすること
+- 例：[{"w":"I love","t":"normal"},{"w":" /","t":"slash"},{"w":"this feeling","t":"phrase",...},{"w":".","t":"normal"}]
 
 以下のJSON形式のみで返答してください（JSON以外出力禁止）：
 
@@ -139,35 +128,28 @@ phrase（フレーズ）の例：
         {"w": "[テキスト]", "t": "normal"},
         {"w": " /", "t": "slash"},
         {"w": "[重要単語]", "t": "vocab", "pron": "[カタカナ]", "ipa": "[IPA]", "meaning": "[日本語の意味]", "example": "[英語例文]"},
-        {"w": "[重要フレーズ]", "t": "phrase", "pron": "[カタカナ]", "ipa": "[IPA]", "meaning": "[日本語の意味]", "example": "[英語例文]"}
+        {"w": ".", "t": "normal"}
       ]
     }
   ]
 }`;
-- sentences は14〜16文程度（Part1: 8文、Part2: 6〜8文）
-- スラッシュ {"w": " /", "t": "slash"} は必ず文の途中・意味のかたまりの区切りに入れる
-- 文末にスラッシュを入れてはいけない
-- vocab・phraseは必ず文の途中に配置し、文末に単独で置かない
-- chunksの最後の要素はnormalかつ文末の句読点（"."や"?"）にすること
 
   const messages = [{
     role: "user",
-    parts: [{ text: `以下の内容で英語学習スクリプトを作成してください。\nユーザーの話す内容と、それに対するネイティブとの会話を含めてください：\n\n${userInput}` }]
+    parts: [{ text: `以下の内容で英語学習スクリプトを作成してください。ユーザーの話す内容と、それに対するネイティブとの会話を含めてください：\n\n${userInput}` }]
   }];
 
   const reply = await callAI(messages, systemPrompt, 4000);
 
   try {
     const clean = reply.replace(/```json/g, "").replace(/```/g, "").trim();
-    const lesson = JSON.parse(clean);
-    return lesson;
+    return JSON.parse(clean);
   } catch (e) {
     console.error("JSON parse error:", e);
     return null;
   }
 }
 
-// ─── SPEECH ──────────────────────────────────────────────────────────────────
 function speakWord(text) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
@@ -210,7 +192,6 @@ function setPlaying(val) {
   if (label) label.textContent = val ? "🔊 再生中..." : "タップして全文を再生";
 }
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
 function getTC(lesson) {
   return {
     vocab:  { bg: lesson.theme.vocabBg,  border: lesson.theme.vocabBorder,  text: lesson.theme.vocabText,  label: "単語" },
@@ -230,6 +211,10 @@ function escHtml(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
+function getSentenceText(s) {
+  return s.chunks.filter(c => c.t !== "slash").map(c => c.w).join("");
+}
+
 function renderChunk(chunk, lesson) {
   const tc = getTC(lesson);
   if (chunk.t === "normal") return `<span>${escHtml(chunk.w)}</span>`;
@@ -239,7 +224,6 @@ function renderChunk(chunk, lesson) {
   const dataItem = escHtml(JSON.stringify(chunk));
   return `<mark class="chunk-mark" data-item="${dataItem}" style="background:${c.bg};color:${c.text};border-bottom:2.5px solid ${c.border}">${escHtml(chunk.w)}${bm}</mark>`;
 }
-// ─── HOME ────────────────────────────────────────────────────────────────────
 function renderHome() {
   const lessons = getLessons();
   document.getElementById("app").innerHTML = `
@@ -275,7 +259,6 @@ function deleteLesson(id) {
   renderHome();
 }
 
-// ─── CREATE LESSON ────────────────────────────────────────────────────────────
 function renderCreateLesson() {
   document.getElementById("app").innerHTML = `
     <div class="home-screen">
@@ -284,24 +267,20 @@ function renderCreateLesson() {
         <h2 class="create-title">➕ 新しいレッスンを作成</h2>
         <p class="create-sub">日本語で話した内容をAIが英語スクリプトに変換します</p>
       </div>
-
       <div class="create-examples">
         <div class="create-example-title">💡 入力例</div>
         <button class="example-btn" onclick="fillExample('私は音楽が大好きです。特にジャズが好きで、休日はよくライブに行きます。音楽は心を豊かにしてくれると思います。')">🎵 音楽について</button>
-        <button class="example-btn" onclick="fillExample('私は料理が趣味です。週末に新しいレシピに挑戦するのが楽しみです。特に和食と イタリアンが得意です。')">🍳 料理について</button>
+        <button class="example-btn" onclick="fillExample('私は料理が趣味です。週末に新しいレシピに挑戦するのが楽しみです。特に和食とイタリアンが得意です。')">🍳 料理について</button>
         <button class="example-btn" onclick="fillExample('私はランニングが好きです。毎朝30分走っています。マラソン大会にも出たことがあります。')">🏃 スポーツについて</button>
       </div>
-
       <div class="create-input-area">
         <div class="create-input-label">あなたの話したい内容を日本語で入力</div>
         <textarea id="lesson-input" class="lesson-textarea"
-          placeholder="例：私は旅行が好きで、特にヨーロッパに行きたいと思っています。フランスのパリやイタリアのローマに興味があります..."></textarea>
+          placeholder="例：私は旅行が好きで、特にヨーロッパに行きたいと思っています..."></textarea>
       </div>
-
       <button id="generate-btn" class="generate-btn" onclick="startGenerate()">
         🤖 AIでスクリプトを生成する
       </button>
-
       <div id="generate-status" class="generate-status hidden"></div>
       <div id="preview-area" class="hidden"></div>
     </div>`;
@@ -316,34 +295,19 @@ async function startGenerate() {
   const input = document.getElementById("lesson-input");
   const btn = document.getElementById("generate-btn");
   const status = document.getElementById("generate-status");
-
-  if (!input || !input.value.trim()) {
-    alert("内容を入力してください");
-    return;
-  }
-
+  if (!input || !input.value.trim()) { alert("内容を入力してください"); return; }
   btn.disabled = true;
   btn.textContent = "⏳ 生成中...";
   status.classList.remove("hidden");
-  status.innerHTML = `
-    <div class="generating">
-      <div class="generating-icon">🤖</div>
-      <div class="generating-text">AIがスクリプトを生成中です...<br>少々お待ちください（10〜20秒）</div>
-    </div>`;
-
+  status.innerHTML = `<div class="generating"><div class="generating-icon">🤖</div><div class="generating-text">AIがスクリプトを生成中です...<br>少々お待ちください（10〜20秒）</div></div>`;
   const lesson = await generateLesson(input.value.trim());
-
   if (!lesson) {
     status.innerHTML = `<div class="generate-error">❌ 生成に失敗しました。もう一度試してください。</div>`;
-    btn.disabled = false;
-    btn.textContent = "🤖 AIでスクリプトを生成する";
-    return;
+    btn.disabled = false; btn.textContent = "🤖 AIでスクリプトを生成する"; return;
   }
-
   lesson.custom = true;
   showPreview(lesson);
-  btn.disabled = false;
-  btn.textContent = "🤖 AIでスクリプトを生成する";
+  btn.disabled = false; btn.textContent = "🤖 AIでスクリプトを生成する";
   status.classList.add("hidden");
 }
 
@@ -354,15 +318,13 @@ function showPreview(lesson) {
     <div class="preview-card" style="border-top:4px solid ${lesson.theme.primary}">
       <div class="preview-title">✅ 生成完了！</div>
       <div class="preview-lesson-title">${lesson.title}</div>
-      <div class="preview-fulltext">${escHtml(lesson.fullText.substring(0, 150))}...</div>
+      <div class="preview-fulltext">${escHtml(lesson.fullText.substring(0,150))}...</div>
       <div class="preview-stats">${lesson.sentences.length}文 · ${getAllItems(lesson).length}単語/フレーズ</div>
       <div class="preview-btns">
-        <button class="preview-save-btn" onclick="saveLesson(${escHtml(JSON.stringify(lesson))})" style="background:${lesson.theme.primary}">
+        <button class="preview-save-btn" onclick='saveLesson(${JSON.stringify(lesson).replace(/'/g,"&#39;")})' style="background:${lesson.theme.primary}">
           💾 保存してレッスンに追加
         </button>
-        <button class="preview-retry-btn" onclick="startGenerate()">
-          🔄 再生成
-        </button>
+        <button class="preview-retry-btn" onclick="startGenerate()">🔄 再生成</button>
       </div>
     </div>`;
 }
@@ -386,13 +348,11 @@ function openLesson(id) {
   renderLesson();
 }
 
-// ─── LESSON ──────────────────────────────────────────────────────────────────
 function renderLesson() {
   const l = currentLesson;
   const tc = getTC(l);
   const allItems = getAllItems(l);
   const bmItems = allItems.filter(x => bookmarks.has(x.w));
-
   document.getElementById("app").innerHTML = `
     <div class="lesson-screen" style="background:linear-gradient(135deg,${l.theme.bg1},${l.theme.bg2},${l.theme.bg3})">
       <div class="lesson-header">
@@ -423,7 +383,6 @@ function renderLesson() {
     <div id="popup-card" class="popup-card hidden"></div>
     <div id="flash-overlay" class="popup-overlay hidden" onclick="closeFlash()"></div>
     <div id="flash-card" class="flash-card hidden"></div>`;
-
   document.querySelectorAll(".chunk-mark").forEach(el => {
     el.addEventListener("click", () => {
       const item = JSON.parse(el.getAttribute("data-item").replace(/&quot;/g,'"'));
@@ -449,7 +408,7 @@ function renderScriptTab(l, tc) {
         <span class="legend-slash" style="color:${l.theme.slash}">/</span><span class="legend-label">区切り</span>
       </div>
       <div class="toggle-btns">
-        <button class="toggle-btn${showTrans?" on":""}" onclick="toggleTrans()" style="${showTrans?"color:#ffd060":""}">
+        <button class="toggle-btn${showTrans?" on":""}" onclick="toggleTrans()" style="${showTrans?"color:#CDA69A":""}">
           ${showTrans?"訳 表示中":"訳 非表示"}
         </button>
         <button class="toggle-btn${showSlash?" on":""}" onclick="toggleSlash()" style="${showSlash?`color:${l.theme.slash}`:""}">
@@ -459,14 +418,15 @@ function renderScriptTab(l, tc) {
     </div>
     <div class="sentences">
       ${l.sentences.map(s => `
-      <div class="sentence-card" style="border-left:3px solid ${l.theme.primary}44">
+        <div class="sentence-card" style="border-left:3px solid ${l.theme.primary}44">
           <div class="sentence-en-row">
             <div class="sentence-en">${s.chunks.map(c => renderChunk(c, l)).join("")}</div>
-            <button class="sentence-speak-btn" onclick="speakWord('${escHtml(s.chunks.filter(c=>c.t!=='slash').map(c=>c.w).join(''))}')" style="color:${l.theme.primary}">🔊</button>
+            <button class="sentence-speak-btn" onclick="speakWord('${escHtml(getSentenceText(s))}')" style="color:${l.theme.primary}">🔊</button>
           </div>
           ${showTrans?`<div class="sentence-ja">🇯🇵 ${escHtml(s.ja)}</div>`:""}
-        </div>
-
+        </div>`).join("")}
+    </div>`;
+}
 
 function renderListTab(l, tc, allItems) {
   return `
@@ -567,22 +527,22 @@ function renderPracticeTab(l) {
 }
 
 function getPracticeWelcome(mode) {
-  return { free:"スクリプトについて何でも聞いてください！", conversation:"Let's practice English conversation!\nまず英語で話しかけてみてください 😊", correction:"英文を入力してください。\n丁寧に添削します！", roleplay:"シナリオを選んで会話練習を始めましょう！", quiz:"「スタート」と入力してクイズを始めましょう！" }[mode]||"";
+  return {free:"スクリプトについて何でも聞いてください！",conversation:"Let's practice English conversation!\nまず英語で話しかけてみてください 😊",correction:"英文を入力してください。\n丁寧に添削します！",roleplay:"シナリオを選んで会話練習を始めましょう！",quiz:"「スタート」と入力してクイズを始めましょう！"}[mode]||"";
 }
 
 function getPracticePlaceholder(mode) {
-  return { free:"例：'goes back to' の使い方を教えて", conversation:"Type in English...", correction:"添削してほしい英文を入力...", roleplay:"英語で話しかけてください...", quiz:"「スタート」または答えを入力..." }[mode]||"";
+  return {free:"例：'goes back to' の使い方を教えて",conversation:"Type in English...",correction:"添削してほしい英文を入力...",roleplay:"英語で話しかけてください...",quiz:"「スタート」または答えを入力..."}[mode]||"";
 }
 
 function selectPracticeMode(mode) {
-  practiceMode = mode; practiceHistory = []; renderLesson();
+  practiceMode=mode; practiceHistory=[]; renderLesson();
 }
 
 function startRoleplay(scenario) {
-  practiceHistory = [];
-  const systemPrompt = getSystemPrompt("roleplay", currentLesson) + `\n\n現在のシナリオ: ${scenario}\nあなたからシナリオに合った役を演じて会話を始めてください。`;
+  practiceHistory=[];
+  const systemPrompt=getSystemPrompt("roleplay",currentLesson)+`\n\n現在のシナリオ: ${scenario}\nあなたからシナリオに合った役を演じて会話を始めてください。`;
   addPracticeMessage("ai","⏳ シナリオを準備中..."); renderPracticeMessages();
-  callAI([{role:"user",parts:[{text:`シナリオ「${scenario}」で会話練習を始めてください。`}]}], systemPrompt).then(reply => {
+  callAI([{role:"user",parts:[{text:`シナリオ「${scenario}」で会話練習を始めてください。`}]}],systemPrompt).then(reply=>{
     practiceHistory=[{role:"ai",text:reply}]; renderLesson(); setTimeout(()=>scrollPractice(),100);
   });
 }
@@ -590,30 +550,30 @@ function startRoleplay(scenario) {
 function addPracticeMessage(role,text) { practiceHistory.push({role,text}); }
 
 function renderPracticeMessages() {
-  const msgs = document.getElementById("practice-messages");
+  const msgs=document.getElementById("practice-messages");
   if (!msgs) return;
-  msgs.innerHTML = practiceHistory.map(m=>`<div class="ai-bubble ${m.role}">${escHtml(m.text)}</div>`).join("");
+  msgs.innerHTML=practiceHistory.map(m=>`<div class="ai-bubble ${m.role}">${escHtml(m.text)}</div>`).join("");
   scrollPractice();
 }
 
 function scrollPractice() {
-  const msgs = document.getElementById("practice-messages");
-  if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  const msgs=document.getElementById("practice-messages");
+  if (msgs) msgs.scrollTop=msgs.scrollHeight;
 }
 
 async function sendPractice() {
-  const input = document.getElementById("practice-input");
+  const input=document.getElementById("practice-input");
   if (!input) return;
-  const msg = input.value.trim();
+  const msg=input.value.trim();
   if (!msg) return;
-  input.value = "";
+  input.value="";
   addPracticeMessage("user",msg);
   addPracticeMessage("ai","考え中...");
   renderPracticeMessages();
-  const messages = practiceHistory.filter(m=>m.text!=="考え中...").slice(0,-1).map(m=>({role:m.role==="user"?"user":"model",parts:[{text:m.text}]}));
+  const messages=practiceHistory.filter(m=>m.text!=="考え中...").slice(0,-1).map(m=>({role:m.role==="user"?"user":"model",parts:[{text:m.text}]}));
   messages.push({role:"user",parts:[{text:msg}]});
-  const reply = await callAI(messages, getSystemPrompt(practiceMode,currentLesson));
-  const idx = practiceHistory.findLastIndex(m=>m.text==="考え中...");
+  const reply=await callAI(messages,getSystemPrompt(practiceMode,currentLesson));
+  const idx=practiceHistory.findLastIndex(m=>m.text==="考え中...");
   if (idx!==-1) practiceHistory[idx]={role:"ai",text:reply};
   renderPracticeMessages();
   if (practiceMode==="conversation"||practiceMode==="roleplay") speakWord(reply.replace(/\[.*?\]/g,"").replace(/\(.*?\)/g,""));
@@ -632,83 +592,3 @@ function toggleSlash() { showSlash=!showSlash; renderLesson(); }
 function toggleBookmark(word) { bookmarks.has(word)?bookmarks.delete(word):bookmarks.add(word); renderLesson(); }
 
 function openPopup(item) {
-  if (typeof item==="string") item=JSON.parse(item);
-  const l=currentLesson, tc=getTC(l), c=tc[item.t], bm=bookmarks.has(item.w);
-  const overlay=document.getElementById("popup-overlay"), card=document.getElementById("popup-card");
-  overlay.classList.remove("hidden"); card.classList.remove("hidden");
-  card.style.borderTop=`6px solid ${c.border}`;
-  card.innerHTML=`
-    <div class="popup-header">
-      <span class="word-badge" style="background:${c.bg};color:${c.text};border:1px solid ${c.border}">${c.label}</span>
-      <button class="bm-popup-btn" onclick="toggleBookmarkPopup('${escHtml(item.w)}')" style="color:${bm?"#F5A623":"#ccc"}">${bm?"★":"☆"}</button>
-    </div>
-    <div class="popup-word-row">
-      <div class="popup-word">"${escHtml(item.w)}"</div>
-      <button class="popup-speak-btn" onclick="speakWord('${escHtml(item.w)}')" style="background:${c.border}">🔊</button>
-    </div>
-    <div class="popup-pron">カタカナ: <strong>${escHtml(item.pron||"")}</strong></div>
-    <div class="popup-ipa">${escHtml(item.ipa||"")}</div>
-    <div class="popup-meaning">🇯🇵 ${escHtml(item.meaning||"")}</div>
-    <div class="popup-example">
-      <div class="popup-example-label">例文</div>
-      <div class="popup-example-text">${escHtml(item.example||"")}</div>
-    </div>
-    ${bm?`<div class="popup-bm-note">★ 単語帳に登録済み</div>`:""}
-    <button class="popup-close-btn" onclick="closePopup()" style="background:${c.border}">閉じる</button>`;
-}
-
-function toggleBookmarkPopup(word) {
-  bookmarks.has(word)?bookmarks.delete(word):bookmarks.add(word);
-  const bm=bookmarks.has(word);
-  const btn=document.querySelector(".bm-popup-btn");
-  if (btn){btn.textContent=bm?"★":"☆";btn.style.color=bm?"#F5A623":"#ccc";}
-  const note=document.querySelector(".popup-bm-note");
-  if (bm&&!note) document.querySelector(".popup-close-btn").insertAdjacentHTML("beforebegin",`<div class="popup-bm-note">★ 単語帳に登録済み</div>`);
-  else if (!bm&&note) note.remove();
-}
-
-function closePopup() {
-  document.getElementById("popup-overlay").classList.add("hidden");
-  document.getElementById("popup-card").classList.add("hidden");
-}
-
-let flashIdx=0, flashFlipped=false, flashResults=[];
-
-function startFlash() { flashIdx=0; flashFlipped=false; flashResults=[]; renderFlash(); }
-
-function renderFlash() {
-  const l=currentLesson, tc=getTC(l), items=getAllItems(l).filter(x=>bookmarks.has(x.w));
-  const overlay=document.getElementById("flash-overlay"), card=document.getElementById("flash-card");
-  overlay.classList.remove("hidden"); card.classList.remove("hidden");
-  if (flashIdx>=items.length) {
-    const ok=flashResults.filter(r=>r==="ok").length;
-    card.innerHTML=`<div class="flash-done"><div class="flash-done-icon">🎉</div><div class="flash-done-title">完了！</div><div class="flash-done-score">${items.length}問中 <strong style="color:${l.theme.primary}">${ok}問</strong> 正解</div><div class="flash-done-btns"><button onclick="startFlash()" style="background:${l.theme.primary}">もう一度</button><button onclick="closeFlash()" style="background:#888">閉じる</button></div></div>`;
-    return;
-  }
-  const item=items[flashIdx], c=tc[item.t];
-  card.innerHTML=`
-    <div class="flash-counter">${flashIdx+1} / ${items.length}</div>
-    <div class="flash-face${flashFlipped?" flipped":""}" onclick="flipCard()"
-      style="background:${flashFlipped?c.bg:`linear-gradient(135deg,${l.theme.bg1},${l.theme.bg3})`};border:2px solid ${flashFlipped?c.border:"transparent"}">
-      <div class="flash-face-word" style="color:${flashFlipped?c.text:"#fff"}">${escHtml(item.w)}</div>
-      ${flashFlipped?`
-        <button onclick="event.stopPropagation();speakWord('${escHtml(item.w)}')" style="margin-top:8px;background:${c.border};border:none;border-radius:99px;padding:4px 12px;color:#fff;font-weight:700;font-size:12px;cursor:pointer">🔊 発音</button>
-        <div class="flash-face-ipa">${escHtml(item.ipa||"")}</div>
-        <div class="flash-face-pron">${escHtml(item.pron||"")}</div>
-        <div class="flash-face-meaning">${escHtml(item.meaning||"")}</div>
-      `:`<div class="flash-face-hint">タップして答えを見る</div>`}
-    </div>
-    ${flashFlipped?`<div class="flash-btns"><button onclick="answerFlash('ng')" style="background:#e74c3c">😓 もう一度</button><button onclick="answerFlash('ok')" style="background:#27AE60">✅ 覚えた！</button></div>`:""}`;
-}
-
-function flipCard() { flashFlipped=true; renderFlash(); }
-function answerFlash(r) { flashResults.push(r); flashIdx++; flashFlipped=false; renderFlash(); }
-function closeFlash() {
-  document.getElementById("flash-overlay").classList.add("hidden");
-  document.getElementById("flash-card").classList.add("hidden");
-}
-
-window.addEventListener("load", () => {
-  window.speechSynthesis?.getVoices();
-  renderHome();
-});

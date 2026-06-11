@@ -179,3 +179,7 @@ sup.bm-star { font-size: 9px; margin-left: 1px; }
 .sentence-en-row .sentence-en { flex: 1; }
 .sentence-speak-btn { background: none; border: none; font-size: 16px; cursor: pointer; padding: 2px 0; flex-shrink: 0; opacity: 0.7; margin-top: 2px; }
 .sentence-speak-btn:hover { opacity: 1; }
+.sentence-en-row { display: flex; align-items: flex-start; gap: 8px; }
+.sentence-en-row .sentence-en { flex: 1; }
+.sentence-speak-btn { background: none; border: none; font-size: 16px; cursor: pointer; padding: 2px 0; flex-shrink: 0; opacity: 0.7; margin-top: 4px; }
+.sentence-speak-btn:hover { opacity: 1; }

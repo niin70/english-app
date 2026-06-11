@@ -65,8 +65,6 @@ function getSystemPrompt(mode, lesson) {
   return prompts[mode] || prompts.free;
 }
 
-prompts.free;
-}
 
 async function generateLesson(userInput) {
   const systemPrompt = `あなたは英語学習コンテンツ作成の専門家です。
@@ -148,13 +146,10 @@ JSON形式のみで返答（JSON以外禁止）：
     return null;
   }
 }
-
-
-
 function speakWord(text) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
+ const u = new SpeechSynthesisUtterance(text);
   u.lang = "en-US"; u.rate = 0.85; u.pitch = 1.0;
   const voices = window.speechSynthesis.getVoices();
   const v = voices.find(x => x.lang.startsWith("en-US")) || voices.find(x => x.lang.startsWith("en"));

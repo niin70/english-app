@@ -459,16 +459,14 @@ function renderScriptTab(l, tc) {
     </div>
     <div class="sentences">
       ${l.sentences.map(s => `
-        <div class="sentence-card" style="border-left:3px solid ${l.theme.primary}44">
+      <div class="sentence-card" style="border-left:3px solid ${l.theme.primary}44">
           <div class="sentence-en-row">
             <div class="sentence-en">${s.chunks.map(c => renderChunk(c, l)).join("")}</div>
             <button class="sentence-speak-btn" onclick="speakWord('${escHtml(s.chunks.filter(c=>c.t!=='slash').map(c=>c.w).join(''))}')" style="color:${l.theme.primary}">🔊</button>
           </div>
           ${showTrans?`<div class="sentence-ja">🇯🇵 ${escHtml(s.ja)}</div>`:""}
         </div>
-`).join("")}
-    </div>`;
-}
+
 
 function renderListTab(l, tc, allItems) {
   return `

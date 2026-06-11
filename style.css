@@ -151,7 +151,8 @@ sup.bm-star { font-size: 9px; margin-left: 1px; }
 .popup-example-label { font-size: 11px; font-weight: 700; color: #bbb; margin-bottom: 3px; }
 .popup-example-text { font-size: 13px; color: #888; font-style: italic; line-height: 1.6; }
 .popup-bm-note { font-size: 11px; color: #CDA69A; text-align: center; margin: 6px 0; }
-.popup-close-btn { margin-top: 12px; width: 100%; padding: 11px; border: none; border-radius: 11px; color: #fff; font-weight: 700; font-size: 14px; }
+.popup-close-btn { margin-top: 12px; width: 100%; padding: 13px; border: none; border-radius: 11px; color: #fff; font-weight: 800; font-size: 15px; letter-spacing: 0.05em; box-shadow: 0 3px 10px rgba(86,123,137,0.3); }
+
 
 .flash-card { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); width: calc(100% - 32px); max-width: 400px; background: #fff; border-radius: 20px; padding: 26px 22px 22px; z-index: 201; animation: popIn 0.18s cubic-bezier(.4,2,.6,1); box-shadow: 0 8px 40px rgba(86,123,137,0.18); }
 @keyframes popIn { from{transform:translate(-50%,-50%) scale(.88);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1} }

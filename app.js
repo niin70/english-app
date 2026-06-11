@@ -65,46 +65,42 @@ function getSystemPrompt(mode, lesson) {
   return prompts[mode] || prompts.free;
 }
 
+prompts.free;
+}
+
 async function generateLesson(userInput) {
   const systemPrompt = `あなたは英語学習コンテンツ作成の専門家です。
 
-【絵文字選定ルール】必ず話題に合った絵文字を選んでください：
-- 音楽・歌→🎵、料理・食事→🍳、旅行→✈️、スポーツ→⚽
-- ファッション→👗、健康・ダイエット→💪、映画・ドラマ→🎬
-- 仕事→💼、自然→🌿、動物→🐾、読書→📚、アート→🎨
-- 友達・人間関係→👫、趣味全般→🎯、テクノロジー→💻
+【絵文字選定】話題に合った絵文字を必ず選ぶ：
+音楽🎵 料理🍳 旅行✈️ スポーツ⚽ ファッション👗 健康💪 映画🎬 仕事💼 自然🌿 読書📚 アート🎨 趣味🎯
 
-【スクリプト構成】必ず以下の2部構成にしてください：
+【スクリプト構成】2部構成：
+Part1（8文）：ユーザーの英語スピーチ
+Part2（6文）：ネイティブとの会話（ja に【あなた】【ネイティブ】を先頭につける）
 
-Part 1（約8文）：ユーザーの自己紹介・意見・経験を英語スピーチとして
-Part 2（約6文）：ネイティブとの自然な会話のやり取り
-  - ネイティブ：興味を持って質問や共感のコメント
-  - ユーザー：具体的に答える
-  - ネイティブ：さらに深掘りまたは自分の意見を共有
+【chunksの作り方 ★最重要★】
+- 1つのchunkは意味のある塊（単語1つ〜フレーズ）
+- 絶対にNG：1単語ずつ分割すること。"Hello/everyone/Today" のような分割は禁止
+- スラッシュは句・節の区切りにのみ使う（3〜8語ごとに1回程度）
+- 正しい例：
+  [{"w":"If you ask me","t":"phrase",...}, {"w":" /","t":"slash"}, {"w":" what I love about this show","t":"normal"}, {"w":" /","t":"slash"}, {"w":" it's the","t":"normal"}, {"w":" compelling","t":"vocab",...}, {"w":" storyline.","t":"normal"}]
+- 悪い例（禁止）：
+  [{"w":"If","t":"normal"},{"w":"/","t":"slash"},{"w":"you","t":"normal"},{"w":"/","t":"slash"}...]
 
-Part 2の各文のja（日本語訳）には必ず【あなた】または【ネイティブ】を先頭につける。
+【vocab・phrase選定ルール】
+絶対選ばない：人名・地名・固有名詞・簡単な単語(good/like/very)
+必ず選ぶ（英会話で役立つ表現）：
+vocab例：compelling、sophisticated、genuinely、obsessed、fascinating、portrayed、stunning、resonate
+phrase例："I can't help but"、"what I love about"、"to be honest"、"no wonder"、"ever since"、"I'm totally into"、"it really hits different"、"I have to say"
 
-【単語・フレーズ選定の厳格なルール】
-絶対に選ばないもの：
-- 人名・地名・固有名詞
-- 誰でも知っている簡単な単語（good、like、very、want など）
+各文に vocab か phrase を1〜2個含める。
+chunksの最後は必ず {"w":"[句読点]","t":"normal"} で終わる。
 
-必ず選ぶもの（英会話で役立つ表現）：
-vocab（単語）の例：stunning、sophisticated、overwhelming、indulge、resonate、compelling、dedicate、transform、genuinely、obsessed
-phrase（フレーズ）の例："to be honest"、"what I love about"、"the thing is"、"I can't help but"、"no wonder"、"I'm totally into"、"it really hits different"、"ever since"
-
-【chunksの組み立てルール】
-- スラッシュ {"w": " /", "t": "slash"} は文の途中・意味のかたまりの区切りにのみ入れる
-- 文末にスラッシュを置いてはいけない
-- vocab・phraseは必ず文の途中に配置する
-- chunksの最後の要素は必ずnormalで句読点（"." "?" "!"）にすること
-- 例：[{"w":"I love","t":"normal"},{"w":" /","t":"slash"},{"w":"this feeling","t":"phrase",...},{"w":".","t":"normal"}]
-
-以下のJSON形式のみで返答してください（JSON以外出力禁止）：
+JSON形式のみで返答（JSON以外禁止）：
 
 {
   "id": "lesson_[英語ID]",
-  "title": "[話題に合った絵文字] [英語タイトル]",
+  "title": "[絵文字] [英語タイトル]",
   "theme": {
     "primary": "#567B89",
     "secondary": "#CDA69A",
@@ -119,15 +115,18 @@ phrase（フレーズ）の例："to be honest"、"what I love about"、"the thi
     "phraseBorder": "#567B89",
     "phraseText": "#1A3A42"
   },
-  "fullText": "[Part1とPart2を含む全文]",
+  "fullText": "[全文]",
   "sentences": [
     {
       "id": 0,
       "ja": "[日本語訳]",
       "chunks": [
-        {"w": "[テキスト]", "t": "normal"},
+        {"w": "If you ask me", "t": "phrase", "pron": "イフ ユー アスク ミー", "ipa": "/ɪf juː æsk miː/", "meaning": "私に言わせれば", "example": "If you ask me, this is amazing."},
         {"w": " /", "t": "slash"},
-        {"w": "[重要単語]", "t": "vocab", "pron": "[カタカナ]", "ipa": "[IPA]", "meaning": "[日本語の意味]", "example": "[英語例文]"},
+        {"w": " what I think,", "t": "normal"},
+        {"w": " /", "t": "slash"},
+        {"w": " it's", "t": "normal"},
+        {"w": " compelling", "t": "vocab", "pron": "コンペリング", "ipa": "/kəmˈpel.ɪŋ/", "meaning": "魅力的な・引き込まれる", "example": "The story is so compelling."},
         {"w": ".", "t": "normal"}
       ]
     }
@@ -136,7 +135,7 @@ phrase（フレーズ）の例："to be honest"、"what I love about"、"the thi
 
   const messages = [{
     role: "user",
-    parts: [{ text: `以下の内容で英語学習スクリプトを作成してください。ユーザーの話す内容と、それに対するネイティブとの会話を含めてください：\n\n${userInput}` }]
+    parts: [{ text: `以下の内容で英語学習スクリプトを作成してください。ユーザーの話と、ネイティブとの会話を含めてください：\n\n${userInput}` }]
   }];
 
   const reply = await callAI(messages, systemPrompt, 4000);
@@ -149,6 +148,8 @@ phrase（フレーズ）の例："to be honest"、"what I love about"、"the thi
     return null;
   }
 }
+
+
 
 function speakWord(text) {
   if (!window.speechSynthesis) return;

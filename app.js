@@ -592,3 +592,83 @@ function toggleSlash() { showSlash=!showSlash; renderLesson(); }
 function toggleBookmark(word) { bookmarks.has(word)?bookmarks.delete(word):bookmarks.add(word); renderLesson(); }
 
 function openPopup(item) {
+  if (typeof item==="string") item=JSON.parse(item);
+  const l=currentLesson, tc=getTC(l), c=tc[item.t], bm=bookmarks.has(item.w);
+  const overlay=document.getElementById("popup-overlay"), card=document.getElementById("popup-card");
+  overlay.classList.remove("hidden"); card.classList.remove("hidden");
+  card.style.borderTop=`6px solid ${c.border}`;
+  card.innerHTML=`
+    <div class="popup-header">
+      <span class="word-badge" style="background:${c.bg};color:${c.text};border:1px solid ${c.border}">${c.label}</span>
+      <button class="bm-popup-btn" onclick="toggleBookmarkPopup('${escHtml(item.w)}')" style="color:${bm?"#CDA69A":"#ccc"}">${bm?"★":"☆"}</button>
+    </div>
+    <div class="popup-word-row">
+      <div class="popup-word">"${escHtml(item.w)}"</div>
+      <button class="popup-speak-btn" onclick="speakWord('${escHtml(item.w)}')" style="background:${c.border}">🔊</button>
+    </div>
+    <div class="popup-pron">カタカナ: <strong>${escHtml(item.pron||"")}</strong></div>
+    <div class="popup-ipa">${escHtml(item.ipa||"")}</div>
+    <div class="popup-meaning">🇯🇵 ${escHtml(item.meaning||"")}</div>
+    <div class="popup-example">
+      <div class="popup-example-label">例文</div>
+      <div class="popup-example-text">${escHtml(item.example||"")}</div>
+    </div>
+    ${bm?`<div class="popup-bm-note">★ 単語帳に登録済み</div>`:""}
+    <button class="popup-close-btn" onclick="closePopup()" style="background:${c.border}">閉じる</button>`;
+}
+
+function toggleBookmarkPopup(word) {
+  bookmarks.has(word)?bookmarks.delete(word):bookmarks.add(word);
+  const bm=bookmarks.has(word);
+  const btn=document.querySelector(".bm-popup-btn");
+  if (btn){btn.textContent=bm?"★":"☆";btn.style.color=bm?"#CDA69A":"#ccc";}
+  const note=document.querySelector(".popup-bm-note");
+  if (bm&&!note) document.querySelector(".popup-close-btn").insertAdjacentHTML("beforebegin",`<div class="popup-bm-note">★ 単語帳に登録済み</div>`);
+  else if (!bm&&note) note.remove();
+}
+
+function closePopup() {
+  document.getElementById("popup-overlay").classList.add("hidden");
+  document.getElementById("popup-card").classList.add("hidden");
+}
+
+let flashIdx=0,flashFlipped=false,flashResults=[];
+
+function startFlash() { flashIdx=0; flashFlipped=false; flashResults=[]; renderFlash(); }
+
+function renderFlash() {
+  const l=currentLesson,tc=getTC(l),items=getAllItems(l).filter(x=>bookmarks.has(x.w));
+  const overlay=document.getElementById("flash-overlay"),card=document.getElementById("flash-card");
+  overlay.classList.remove("hidden"); card.classList.remove("hidden");
+  if (flashIdx>=items.length) {
+    const ok=flashResults.filter(r=>r==="ok").length;
+    card.innerHTML=`<div class="flash-done"><div class="flash-done-icon">🎉</div><div class="flash-done-title">完了！</div><div class="flash-done-score">${items.length}問中 <strong style="color:${l.theme.primary}">${ok}問</strong> 正解</div><div class="flash-done-btns"><button onclick="startFlash()" style="background:${l.theme.primary}">もう一度</button><button onclick="closeFlash()" style="background:#888">閉じる</button></div></div>`;
+    return;
+  }
+  const item=items[flashIdx],c=tc[item.t];
+  card.innerHTML=`
+    <div class="flash-counter">${flashIdx+1} / ${items.length}</div>
+    <div class="flash-face${flashFlipped?" flipped":""}" onclick="flipCard()"
+      style="background:${flashFlipped?c.bg:`linear-gradient(135deg,${l.theme.bg1},${l.theme.bg3})`};border:2px solid ${flashFlipped?c.border:"transparent"}">
+      <div class="flash-face-word" style="color:${flashFlipped?c.text:"#2a3a42"}">${escHtml(item.w)}</div>
+      ${flashFlipped?`
+        <button onclick="event.stopPropagation();speakWord('${escHtml(item.w)}')" style="margin-top:8px;background:${c.border};border:none;border-radius:99px;padding:4px 12px;color:#fff;font-weight:700;font-size:12px;cursor:pointer">🔊 発音</button>
+        <div class="flash-face-ipa">${escHtml(item.ipa||"")}</div>
+        <div class="flash-face-pron">${escHtml(item.pron||"")}</div>
+        <div class="flash-face-meaning">${escHtml(item.meaning||"")}</div>
+      `:`<div class="flash-face-hint">タップして答えを見る</div>`}
+    </div>
+    ${flashFlipped?`<div class="flash-btns"><button onclick="answerFlash('ng')" style="background:#e74c3c">😓 もう一度</button><button onclick="answerFlash('ok')" style="background:#27AE60">✅ 覚えた！</button></div>`:""}`;
+}
+
+function flipCard() { flashFlipped=true; renderFlash(); }
+function answerFlash(r) { flashResults.push(r); flashIdx++; flashFlipped=false; renderFlash(); }
+function closeFlash() {
+  document.getElementById("flash-overlay").classList.add("hidden");
+  document.getElementById("flash-card").classList.add("hidden");
+}
+
+window.addEventListener("load", () => {
+  window.speechSynthesis?.getVoices();
+  renderHome();
+});

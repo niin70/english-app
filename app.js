@@ -85,70 +85,83 @@ async function translateSentence(engText) {
 
 // ─── LESSON GENERATE ─────────────────────────────────────────────────────────
 async function generateLesson(userInput) {
-  const systemPrompt = `あなたは英語学習コンテンツ作成の専門家です。
+  const systemPrompt = `You are an English learning content creator. Return ONLY valid JSON, no explanation, no markdown fences.
 
-【絵文字選定】話題に合った絵文字を必ず選ぶ：
-音楽🎵 料理🍳 旅行✈️ スポーツ⚽ ファッション👗 健康💪 映画🎬 仕事💼 自然🌿 読書📚 アート🎨 趣味🎯
-
-【スクリプト構成】2部構成：
-Part1（8文）：ユーザーの英語スピーチ
-Part2（6文）：ネイティブとの会話（ja に【あなた】【ネイティブ】を先頭につける）
-
-【重要】sentences配列の各要素は必ず1文（1センテンス）のみ。
-複数文をひとつのsentenceにまとめることは絶対禁止。
-各sentenceのjaには、その1文の完全な日本語訳を記載すること。
-
-【chunksの作り方 ★最重要★】
-- 1つのchunkは意味のある塊（単語1つ〜フレーズ）
-- スラッシュは句・節の区切りにのみ使う（3〜8語ごとに1回程度）
-- 正しい例：
-  [{"w":"If you ask me","t":"phrase",...}, {"w":" /","t":"slash"}, {"w":" it's","t":"normal"}, {"w":" compelling","t":"vocab",...}, {"w":" storyline.","t":"normal"}]
-
-【vocab・phrase選定ルール】
-絶対選ばない：人名・地名・固有名詞・簡単な単語(good/like/very)
-必ず選ぶ：compelling, sophisticated, genuinely, fascinating, stunning, resonate, "I can't help but", "to be honest", "no wonder", "ever since", "I'm totally into"
-
-各文に vocab か phrase を1〜2個含める。
-
-JSON形式のみで返答：
+Output this exact JSON structure:
 {
-  "id": "lesson_[英語ID]",
-  "title": "[絵文字] [英語タイトル]",
-  "theme": {
-    "primary": "#567B89",
-    "secondary": "#CDA69A",
-    "bg1": "#f9f5f2",
-    "bg2": "#eef3f6",
-    "bg3": "#f5f0ee",
-    "slash": "#567B89",
-    "vocabBg": "#FFF3E0",
-    "vocabBorder": "#CDA69A",
-    "vocabText": "#7A4A35",
-    "phraseBg": "#E3EFF3",
-    "phraseBorder": "#567B89",
-    "phraseText": "#1A3A42"
-  },
-  "fullText": "[全文]",
+  "id": "lesson_dance",
+  "title": "💃 Dancing My Way Around the World",
+  "theme": {"primary":"#567B89","secondary":"#CDA69A","bg1":"#f9f5f2","bg2":"#eef3f6","bg3":"#f5f0ee","slash":"#567B89","vocabBg":"#FFF3E0","vocabBorder":"#E08800","vocabText":"#7A4A35","phraseBg":"#D6EEFF","phraseBorder":"#2074B8","phraseText":"#0A3A5C"},
+  "fullText": "full English script here",
   "sentences": [
-    {
-      "id": 0,
-      "ja": "[この1文の日本語訳]",
-      "chunks": [...]
-    }
+    {"id":0,"ja":"日本語訳（1文ずつ）","chunks":[
+      {"w":"I can't help but","t":"phrase","pron":"アイ キャント ヘルプ バット","ipa":"/aɪ kænt help bʌt/","meaning":"〜せずにはいられない","example":"I can't help but smile when I dance."},
+      {"w":" /","t":"slash"},
+      {"w":" share my passion","t":"normal"},
+      {"w":" for dancing","t":"normal"},
+      {"w":".","t":"normal"}
+    ]}
   ]
-}`;
+}
 
-  const messages = [{
-    role: "user",
-    parts: [{ text: `以下の内容で英語学習スクリプトを作成してください：\n\n${userInput}` }]
-  }];
+Rules:
+- sentences: each element = exactly ONE English sentence (one period/exclamation)
+- ja: complete Japanese translation of that one sentence
+- chunks: meaningful phrase groups (3-7 words each), NOT word-by-word
+- slash chunks: {"w":" /","t":"slash"} only at clause boundaries
+- vocab chunks: important English words with pron/ipa/meaning/example
+- phrase chunks: useful set phrases with pron/ipa/meaning/example  
+- normal chunks: everything else, NO extra fields
+- Include 8 speech sentences (Part1) + 6 conversation sentences (Part2, ja starts with【あなた】or【ネイティブ】)
+- Pick 1-2 vocab or phrase per sentence
+- Good vocab: passionate, incredible, stunning, genuinely, fascinating, rhythm, energized
+- Good phrases: "I can't help but", "ever since", "to be honest", "no wonder", "what I love about"`;
 
-  const reply = await callAI(messages, systemPrompt, 4000);
+  const userMessage = `Create an English learning script based on this Japanese input:\n\n${userInput}`;
+
+  // まずcallAIで試みる（バックエンド経由）
+  let reply = await callAI(
+    [{ role: "user", content: userMessage }],
+    systemPrompt,
+    3500
+  );
+
+  // バックエンドが parts 形式を期待している場合のフォールバック
+  if (!reply || reply.startsWith("エラー") || reply.startsWith("通信エラー")) {
+    reply = await callAI(
+      [{ role: "user", parts: [{ text: userMessage }] }],
+      systemPrompt,
+      3500
+    );
+  }
+
+  if (!reply || reply.startsWith("エラー") || reply.startsWith("通信エラー")) {
+    console.error("AI call failed:", reply);
+    return null;
+  }
+
+  // JSONを抽出（コードブロックや前後の文字列を除去）
   try {
-    const clean = reply.replace(/```json/g, "").replace(/```/g, "").trim();
-    return JSON.parse(clean);
+    // まずそのままパース
+    let clean = reply.trim();
+    // ```json ... ``` を除去
+    clean = clean.replace(/^```json\s*/i, "").replace(/\s*```\s*$/, "");
+    clean = clean.replace(/^```\s*/, "").replace(/\s*```\s*$/, "");
+    // 先頭の { から末尾の } までを抽出
+    const start = clean.indexOf("{");
+    const end = clean.lastIndexOf("}");
+    if (start !== -1 && end !== -1 && end > start) {
+      clean = clean.slice(start, end + 1);
+    }
+    const parsed = JSON.parse(clean);
+    // 最低限のバリデーション
+    if (!parsed.sentences || !Array.isArray(parsed.sentences) || parsed.sentences.length === 0) {
+      console.error("Invalid lesson structure:", parsed);
+      return null;
+    }
+    return parsed;
   } catch (e) {
-    console.error("JSON parse error:", e);
+    console.error("JSON parse error:", e, "\nRaw reply:", reply.substring(0, 300));
     return null;
   }
 }
@@ -367,18 +380,45 @@ async function startGenerate() {
   const btn = document.getElementById("generate-btn");
   const status = document.getElementById("generate-status");
   if (!input || !input.value.trim()) { alert("内容を入力してください"); return; }
+
   btn.disabled = true;
   btn.textContent = "⏳ 生成中...";
   status.classList.remove("hidden");
-  status.innerHTML = `<div class="generating"><div class="generating-icon">🤖</div><div class="generating-text">AIがスクリプトを生成中です...<br>少々お待ちください（10〜20秒）</div></div>`;
+
+  const steps = ["🤖 AIがスクリプト作成中...","📝 英文とチャンクを構築中...","🇯🇵 日本語訳を追加中...","✨ もうすぐ完成です..."];
+  let stepIdx = 0;
+  status.innerHTML = `<div class="generating"><div class="generating-icon">🤖</div><div class="generating-text" id="gen-step">${steps[0]}<br><small style="color:#aaa">（20〜30秒かかります）</small></div></div>`;
+  const stepTimer = setInterval(() => {
+    stepIdx = (stepIdx + 1) % steps.length;
+    const el = document.getElementById("gen-step");
+    if (el) el.innerHTML = `${steps[stepIdx]}<br><small style="color:#aaa">（20〜30秒かかります）</small>`;
+  }, 7000);
+
   const lesson = await generateLesson(input.value.trim());
+  clearInterval(stepTimer);
+
   if (!lesson) {
-    status.innerHTML = `<div class="generate-error">❌ 生成に失敗しました。もう一度試してください。</div>`;
-    btn.disabled = false; btn.textContent = "🤖 AIでスクリプトを生成する"; return;
+    status.innerHTML = `
+      <div style="background:#fff5f5;border:1px solid #ffcccc;border-radius:12px;padding:16px;text-align:center">
+        <div style="font-size:24px;margin-bottom:8px">❌</div>
+        <div style="font-weight:700;color:#c0392b;margin-bottom:6px">生成に失敗しました</div>
+        <div style="font-size:13px;color:#666;margin-bottom:12px">
+          入力が長すぎるか通信エラーの可能性があります。<br>
+          少し短い内容で試してみてください。
+        </div>
+        <button onclick="startGenerate()" style="background:#c0392b;color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:14px;cursor:pointer">
+          🔄 もう一度試す
+        </button>
+      </div>`;
+    btn.disabled = false;
+    btn.textContent = "🤖 AIでスクリプトを生成する";
+    return;
   }
+
   lesson.custom = true;
   showPreview(lesson);
-  btn.disabled = false; btn.textContent = "🤖 AIでスクリプトを生成する";
+  btn.disabled = false;
+  btn.textContent = "🤖 AIでスクリプトを生成する";
   status.classList.add("hidden");
 }
 

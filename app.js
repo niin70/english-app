@@ -73,26 +73,52 @@ function getSystemPrompt(mode, lesson) {
 // ─── スクリプト自動生成 ───────────────────────────────────────────────────────
 async function generateLesson(userInput) {
   const systemPrompt = `あなたは英語学習コンテンツ作成の専門家です。
-ユーザーが日本語で話した内容をもとに、英語学習用のスクリプトデータを作成してください。
 
-【重要】スクリプトは以下の2部構成にしてください：
-1. ユーザー自身のスピーチ（自己紹介・意見・経験を英語で述べる）約8文
-2. ネイティブとの自然な会話のやり取り（2〜3往復）約6文
-   - ネイティブからの質問や反応
-   - ユーザーの返答
-   - さらなる深掘り会話
+【絵文字選定ルール】必ず話題に合った絵文字を選んでください：
+- 音楽・歌→🎵、料理・食事→🍳、旅行→✈️、スポーツ→⚽
+- ファッション→👗、健康・ダイエット→💪、映画・ドラマ→🎬
+- 仕事→💼、自然→🌿、動物→🐾、読書→📚、アート→🎨
+- 友達・人間関係→👫、趣味全般→🎯、テクノロジー→💻
 
-話題に最も合う絵文字を1つ選んでtitleの先頭に入れてください。
-例：音楽→🎵、料理→🍳、旅行→✈️、スポーツ→⚽、ファッション→👗、健康→💪、映画→🎬、仕事→💼など
+【スクリプト構成】必ず以下の2部構成にしてください：
 
-以下のJSON形式で返答してください。JSON以外は一切出力しないでください：
+Part 1（約8文）：ユーザーの自己紹介・意見・経験を英語スピーチとして
+Part 2（約6文）：ネイティブとの自然な会話のやり取り
+  - ネイティブ：興味を持って質問や共感のコメント
+  - ユーザー：具体的に答える
+  - ネイティブ：さらに深掘りまたは自分の意見を共有
+
+Part 2の各文のja（日本語訳）には必ず【あなた】または【ネイティブ】を先頭につける。
+
+【単語・フレーズ選定の厳格なルール】
+絶対に選ばないもの：
+- 人名（Jenny、Gossip Girlなど）
+- 地名・固有名詞
+- 誰でも知っている簡単な単語（good、like、very、want など）
+
+必ず選ぶもの（英会話で役立つ表現）：
+vocab（単語）の例：
+- stunning、gorgeous、sophisticated、overwhelming
+- indulge、resonate、spontaneous、compelling
+- dedicate、transform、genuinely、obsessed
+
+phrase（フレーズ）の例：
+- "to be honest"、"what I love about"、"the thing is"
+- "I can't help but"、"it means a lot to me"、"no wonder"
+- "I'm totally into"、"it really hits different"、"I have to say"
+- "ever since"、"what really got me was"、"I can relate to that"
+
+各文に必ずvocabかphraseを1〜2個含めること。
+全体で vocab 8個以上、phrase 6個以上含めること。
+
+以下のJSON形式のみで返答してください（JSON以外出力禁止）：
 
 {
-  "id": "lesson_[英語の短いID]",
-  "title": "[絵文字] [英語タイトル]",
+  "id": "lesson_[英語ID]",
+  "title": "[話題に合った絵文字] [英語タイトル]",
   "theme": {
-    "primary": "#[話題に合った色]",
-    "secondary": "#[補色]",
+    "primary": "#567B89",
+    "secondary": "#CDA69A",
     "bg1": "#f9f5f2",
     "bg2": "#eef3f6",
     "bg3": "#f5f0ee",
@@ -100,11 +126,11 @@ async function generateLesson(userInput) {
     "vocabBg": "#FFF3E0",
     "vocabBorder": "#CDA69A",
     "vocabText": "#7A4A35",
-    "phraseBg": "#E8F4F0",
+    "phraseBg": "#E3EFF3",
     "phraseBorder": "#567B89",
-    "phraseText": "#1A4A3A"
+    "phraseText": "#1A3A42"
   },
-  "fullText": "[スクリプト全文。Part1とPart2を含む自然な英文]",
+  "fullText": "[Part1とPart2を含む全文]",
   "sentences": [
     {
       "id": 0,
@@ -112,36 +138,29 @@ async function generateLesson(userInput) {
       "chunks": [
         {"w": "[テキスト]", "t": "normal"},
         {"w": " /", "t": "slash"},
-        {"w": "[重要単語]", "t": "vocab", "pron": "[カタカナ]", "ipa": "[IPA]", "meaning": "[意味]", "example": "[例文]"},
-        {"w": "[重要フレーズ]", "t": "phrase", "pron": "[カタカナ]", "ipa": "[IPA]", "meaning": "[意味]", "example": "[例文]"}
+        {"w": "[重要単語]", "t": "vocab", "pron": "[カタカナ]", "ipa": "[IPA]", "meaning": "[日本語の意味]", "example": "[英語例文]"},
+        {"w": "[重要フレーズ]", "t": "phrase", "pron": "[カタカナ]", "ipa": "[IPA]", "meaning": "[日本語の意味]", "example": "[英語例文]"}
       ]
     }
   ]
-}
+}`;
 
-単語・フレーズ選定のルール：
-- 各文に必ず1〜2個のvocabまたはphraseを含める
-- ネイティブがよく使う自然な表現を優先して選ぶ
-- 以下のような表現を積極的に選ぶ：
-  * 慣用句・イディオム（例："I'm into", "it hits different", "no wonder"）
-  * 便利なフレーズ（例："to be honest", "what I love about", "the thing is"）
-  * 感情を表す生き生きとした表現
-  * 会話でよく使うつなぎ言葉
-- sentences は14〜16文程度（Part1: 8文、Part2: 6〜8文）
-- Part2の会話部分には話者を示す prefix を ja に入れる（例：「【あなた】〜」「【ネイティブ】〜」）`;
+  const messages = [{
+    role: "user",
+    parts: [{ text: `以下の内容で英語学習スクリプトを作成してください。\nユーザーの話す内容と、それに対するネイティブとの会話を含めてください：\n\n${userInput}` }]
+  }];
 
-  const messages = [{ role: "user", parts: [{ text: `以下の内容で英語学習スクリプトを作成してください：\n\n${userInput}` }] }];
   const reply = await callAI(messages, systemPrompt, 4000);
 
   try {
     const clean = reply.replace(/```json/g, "").replace(/```/g, "").trim();
-    return JSON.parse(clean);
+    const lesson = JSON.parse(clean);
+    return lesson;
   } catch (e) {
-    console.error("JSON parse error:", e, reply);
+    console.error("JSON parse error:", e);
     return null;
   }
 }
-
 
 // ─── SPEECH ──────────────────────────────────────────────────────────────────
 function speakWord(text) {

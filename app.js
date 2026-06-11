@@ -9,6 +9,9 @@ let progressInterval = null;
 let practiceMode = "free";
 let practiceHistory = [];
 
+// 日本語訳キャッシュ（自動翻訳した結果を保存）
+const jaCache = {};
+
 const STORAGE_KEY = "english_app_custom_lessons";
 
 function loadCustomLessons() {
@@ -65,7 +68,22 @@ function getSystemPrompt(mode, lesson) {
   return prompts[mode] || prompts.free;
 }
 
+// ─── AI翻訳（不足している日本語訳を自動補完）────────────────────────────────
+async function translateSentence(engText) {
+  const cacheKey = engText.trim();
+  if (jaCache[cacheKey]) return jaCache[cacheKey];
 
+  const reply = await callAI(
+    [{ role: "user", parts: [{ text: `次の英文を自然な日本語に翻訳してください。訳文のみ出力してください（説明不要）：\n"${engText}"` }] }],
+    "あなたは英語→日本語の翻訳者です。訳文のみを出力し、それ以外の説明は一切不要です。",
+    200
+  );
+  const result = reply.trim();
+  jaCache[cacheKey] = result;
+  return result;
+}
+
+// ─── LESSON GENERATE ─────────────────────────────────────────────────────────
 async function generateLesson(userInput) {
   const systemPrompt = `あなたは英語学習コンテンツ作成の専門家です。
 
@@ -76,26 +94,23 @@ async function generateLesson(userInput) {
 Part1（8文）：ユーザーの英語スピーチ
 Part2（6文）：ネイティブとの会話（ja に【あなた】【ネイティブ】を先頭につける）
 
+【重要】sentences配列の各要素は必ず1文（1センテンス）のみ。
+複数文をひとつのsentenceにまとめることは絶対禁止。
+各sentenceのjaには、その1文の完全な日本語訳を記載すること。
+
 【chunksの作り方 ★最重要★】
 - 1つのchunkは意味のある塊（単語1つ〜フレーズ）
-- 絶対にNG：1単語ずつ分割すること。"Hello/everyone/Today" のような分割は禁止
 - スラッシュは句・節の区切りにのみ使う（3〜8語ごとに1回程度）
 - 正しい例：
-  [{"w":"If you ask me","t":"phrase",...}, {"w":" /","t":"slash"}, {"w":" what I love about this show","t":"normal"}, {"w":" /","t":"slash"}, {"w":" it's the","t":"normal"}, {"w":" compelling","t":"vocab",...}, {"w":" storyline.","t":"normal"}]
-- 悪い例（禁止）：
-  [{"w":"If","t":"normal"},{"w":"/","t":"slash"},{"w":"you","t":"normal"},{"w":"/","t":"slash"}...]
+  [{"w":"If you ask me","t":"phrase",...}, {"w":" /","t":"slash"}, {"w":" it's","t":"normal"}, {"w":" compelling","t":"vocab",...}, {"w":" storyline.","t":"normal"}]
 
 【vocab・phrase選定ルール】
 絶対選ばない：人名・地名・固有名詞・簡単な単語(good/like/very)
-必ず選ぶ（英会話で役立つ表現）：
-vocab例：compelling、sophisticated、genuinely、obsessed、fascinating、portrayed、stunning、resonate
-phrase例："I can't help but"、"what I love about"、"to be honest"、"no wonder"、"ever since"、"I'm totally into"、"it really hits different"、"I have to say"
+必ず選ぶ：compelling, sophisticated, genuinely, fascinating, stunning, resonate, "I can't help but", "to be honest", "no wonder", "ever since", "I'm totally into"
 
 各文に vocab か phrase を1〜2個含める。
-chunksの最後は必ず {"w":"[句読点]","t":"normal"} で終わる。
 
-JSON形式のみで返答（JSON以外禁止）：
-
+JSON形式のみで返答：
 {
   "id": "lesson_[英語ID]",
   "title": "[絵文字] [英語タイトル]",
@@ -117,27 +132,18 @@ JSON形式のみで返答（JSON以外禁止）：
   "sentences": [
     {
       "id": 0,
-      "ja": "[日本語訳]",
-      "chunks": [
-        {"w": "If you ask me", "t": "phrase", "pron": "イフ ユー アスク ミー", "ipa": "/ɪf juː æsk miː/", "meaning": "私に言わせれば", "example": "If you ask me, this is amazing."},
-        {"w": " /", "t": "slash"},
-        {"w": " what I think,", "t": "normal"},
-        {"w": " /", "t": "slash"},
-        {"w": " it's", "t": "normal"},
-        {"w": " compelling", "t": "vocab", "pron": "コンペリング", "ipa": "/kəmˈpel.ɪŋ/", "meaning": "魅力的な・引き込まれる", "example": "The story is so compelling."},
-        {"w": ".", "t": "normal"}
-      ]
+      "ja": "[この1文の日本語訳]",
+      "chunks": [...]
     }
   ]
 }`;
 
   const messages = [{
     role: "user",
-    parts: [{ text: `以下の内容で英語学習スクリプトを作成してください。ユーザーの話と、ネイティブとの会話を含めてください：\n\n${userInput}` }]
+    parts: [{ text: `以下の内容で英語学習スクリプトを作成してください：\n\n${userInput}` }]
   }];
 
   const reply = await callAI(messages, systemPrompt, 4000);
-
   try {
     const clean = reply.replace(/```json/g, "").replace(/```/g, "").trim();
     return JSON.parse(clean);
@@ -146,10 +152,12 @@ JSON形式のみで返答（JSON以外禁止）：
     return null;
   }
 }
+
+// ─── SPEECH ──────────────────────────────────────────────────────────────────
 function speakWord(text) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
- const u = new SpeechSynthesisUtterance(text);
+  const u = new SpeechSynthesisUtterance(text);
   u.lang = "en-US"; u.rate = 0.85; u.pitch = 1.0;
   const voices = window.speechSynthesis.getVoices();
   const v = voices.find(x => x.lang.startsWith("en-US")) || voices.find(x => x.lang.startsWith("en"));
@@ -188,10 +196,24 @@ function setPlaying(val) {
   if (label) label.textContent = val ? "🔊 再生中..." : "タップして全文を再生";
 }
 
+// ─── THEME COLORS ─────────────────────────────────────────────────────────────
+// 【英検3級向け】
+// vocab（単語）: 暖かいオレンジ系 → 重要単語として目立たせる
+// phrase（フレーズ）: 青緑系 → まとめて覚えるフレーズ
 function getTC(lesson) {
   return {
-    vocab:  { bg: lesson.theme.vocabBg,  border: lesson.theme.vocabBorder,  text: lesson.theme.vocabText,  label: "単語" },
-    phrase: { bg: lesson.theme.phraseBg, border: lesson.theme.phraseBorder, text: lesson.theme.phraseText, label: "フレーズ" }
+    vocab: {
+      bg:     lesson.theme.vocabBg     || "#FFF0CC",
+      border: lesson.theme.vocabBorder || "#E08800",
+      text:   lesson.theme.vocabText   || "#7A4A00",
+      label:  "単語"
+    },
+    phrase: {
+      bg:     lesson.theme.phraseBg    || "#D6EEFF",
+      border: lesson.theme.phraseBorder|| "#2074B8",
+      text:   lesson.theme.phraseText  || "#0A3A5C",
+      label:  "フレーズ"
+    }
   };
 }
 
@@ -211,15 +233,68 @@ function getSentenceText(s) {
   return s.chunks.filter(c => c.t !== "slash").map(c => c.w).join("");
 }
 
+// ─── CHUNKS → 文単位に分割 ───────────────────────────────────────────────────
+// 1つのsentenceに複数の英文が詰め込まれている場合に対応
+// "." "!" "?" で終わる normal chunk を区切りとして分割する
+function splitChunksIntoSubSentences(chunks) {
+  const groups = [];
+  let current = [];
+  for (const chunk of chunks) {
+    current.push(chunk);
+    if (chunk.t === "normal") {
+      const w = chunk.w.trim();
+      // 文末記号で終わる場合に分割（".." のような二重ピリオドも対応）
+      if (/[.!?]+\s*$/.test(w)) {
+        groups.push(current);
+        current = [];
+      }
+    }
+  }
+  if (current.length > 0) groups.push(current);
+  // 分割できなかった場合はそのまま返す
+  return groups.length > 0 ? groups : [chunks];
+}
+
+// サブグループから英文テキストを取得
+function getSubSentenceText(chunksGroup) {
+  return chunksGroup.filter(c => c.t !== "slash").map(c => c.w).join("").trim();
+}
+
+// ─── CHUNK RENDER ─────────────────────────────────────────────────────────────
+// 【重要】vocab も phrase も同じようにタップ可能・色付き表示
+// 英検3級学習者向け：
+//   vocab（単語）= オレンジ背景 + 太字下線 → 重要単語として強調
+//   phrase（フレーズ）= 青背景 + 太字下線 → まとめて覚えるフレーズとして強調
 function renderChunk(chunk, lesson) {
   const tc = getTC(lesson);
   if (chunk.t === "normal") return `<span>${escHtml(chunk.w)}</span>`;
-  if (chunk.t === "slash") return showSlash ? `<span class="slash-mark">/</span>` : `<span style="visibility:hidden"> </span>`;
+  if (chunk.t === "slash") {
+    return showSlash
+      ? `<span class="slash-mark" style="color:${lesson.theme.slash||'#567B89'}">/</span>`
+      : `<span style="visibility:hidden"> </span>`;
+  }
   const c = tc[chunk.t];
-  const bm = bookmarks.has(chunk.w) ? '<sup class="bm-star">★</sup>' : "";
-  const dataItem = escHtml(JSON.stringify(chunk));
-  return `<mark class="chunk-mark" data-item="${dataItem}" style="background:${c.bg};color:${c.text};border-bottom:2.5px solid ${c.border}">${escHtml(chunk.w)}${bm}</mark>`;
+  const bm = bookmarks.has(chunk.w) ? '<sup class="bm-star" style="color:#E08800;font-size:10px">★</sup>' : "";
+  // data-itemはシングルクォートをエスケープして埋め込み
+  const dataItem = JSON.stringify(chunk).replace(/"/g, "&quot;");
+  return `<mark
+    class="chunk-mark chunk-${chunk.t}"
+    data-item="${dataItem}"
+    style="
+      background:${c.bg};
+      color:${c.text};
+      border-bottom:3px solid ${c.border};
+      border-radius:4px;
+      padding:1px 3px;
+      cursor:pointer;
+      font-weight:700;
+      text-decoration:none;
+      box-shadow:0 1px 3px ${c.border}44;
+    "
+  >${escHtml(chunk.w)}${bm}</mark>`;
 }
+
+// ─── HOME ─────────────────────────────────────────────────────────────────────
 function renderHome() {
   const lessons = getLessons();
   document.getElementById("app").innerHTML = `
@@ -344,11 +419,13 @@ function openLesson(id) {
   renderLesson();
 }
 
+// ─── LESSON RENDER ────────────────────────────────────────────────────────────
 function renderLesson() {
   const l = currentLesson;
   const tc = getTC(l);
   const allItems = getAllItems(l);
   const bmItems = allItems.filter(x => bookmarks.has(x.w));
+
   document.getElementById("app").innerHTML = `
     <div class="lesson-screen" style="background:linear-gradient(135deg,${l.theme.bg1},${l.theme.bg2},${l.theme.bg3})">
       <div class="lesson-header">
@@ -367,7 +444,12 @@ function renderLesson() {
         </div>
       </div>
       <div class="tab-bar">
-        ${[["script","📄 スクリプト"],["list","📚 単語一覧"],["notebook",`★ 単語帳${bookmarks.size>0?` (${bookmarks.size})`:""}`],["practice","🗣️ 英会話練習"]].map(([k,lb]) =>
+        ${[
+          ["script","📄 スクリプト"],
+          ["list","📚 単語一覧"],
+          ["notebook",`★ 単語帳${bookmarks.size>0?` (${bookmarks.size})`:""}`],
+          ["practice","🗣️ 英会話練習"]
+        ].map(([k,lb]) =>
           `<button class="tab-btn${currentTab===k?" active":""}" onclick="switchTab('${k}')">${lb}</button>`
         ).join("")}
       </div>
@@ -379,10 +461,18 @@ function renderLesson() {
     <div id="popup-card" class="popup-card hidden"></div>
     <div id="flash-overlay" class="popup-overlay hidden" onclick="closeFlash()"></div>
     <div id="flash-card" class="flash-card hidden"></div>`;
+
+  // ─ chunk-mark クリックイベント登録（vocab・phrase 両方）
   document.querySelectorAll(".chunk-mark").forEach(el => {
-    el.addEventListener("click", () => {
-      const item = JSON.parse(el.getAttribute("data-item").replace(/&quot;/g,'"'));
-      openPopup(item);
+    el.addEventListener("click", e => {
+      e.stopPropagation();
+      try {
+        const raw = el.getAttribute("data-item").replace(/&quot;/g, '"');
+        const item = JSON.parse(raw);
+        openPopup(item);
+      } catch(err) {
+        console.error("popup parse error:", err);
+      }
     });
   });
 }
@@ -395,47 +485,115 @@ function renderTabContent(l, tc, allItems, bmItems) {
   return "";
 }
 
+// ─── SCRIPT TAB ───────────────────────────────────────────────────────────────
+// 【修正ポイント1】chunks を文末記号で自動分割して、文ごとにカードを分けて表示
+// 【修正ポイント2】jaが1文しかない場合、残りの分割文は自動翻訳で補完（非同期）
 function renderScriptTab(l, tc) {
-  return `
+  // 凡例：タップできることを明示
+  const legendHtml = `
     <div class="controls-row">
       <div class="legend">
-        <span class="legend-dot" style="background:${tc.vocab.border}"></span><span class="legend-label">単語</span>
-        <span class="legend-dot" style="background:${tc.phrase.border}"></span><span class="legend-label">フレーズ</span>
-        <span class="legend-slash" style="color:${l.theme.slash}">/</span><span class="legend-label">区切り</span>
+        <span class="legend-dot" style="background:${tc.vocab.border};width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:3px"></span>
+        <span class="legend-label" style="color:${tc.vocab.text};font-weight:600">単語</span>
+        <span style="font-size:10px;color:#999;margin-right:8px">（タップ→解説）</span>
+        <span class="legend-dot" style="background:${tc.phrase.border};width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:3px"></span>
+        <span class="legend-label" style="color:${tc.phrase.text};font-weight:600">フレーズ</span>
+        <span style="font-size:10px;color:#999;margin-right:8px">（タップ→解説）</span>
+        <span class="legend-slash" style="color:${l.theme.slash||'#567B89'};font-weight:700">/</span>
+        <span class="legend-label">区切り</span>
       </div>
       <div class="toggle-btns">
         <button class="toggle-btn${showTrans?" on":""}" onclick="toggleTrans()" style="${showTrans?"color:#CDA69A":""}">
           ${showTrans?"訳 表示中":"訳 非表示"}
         </button>
-        <button class="toggle-btn${showSlash?" on":""}" onclick="toggleSlash()" style="${showSlash?`color:${l.theme.slash}`:""}">
+        <button class="toggle-btn${showSlash?" on":""}" onclick="toggleSlash()" style="${showSlash?`color:${l.theme.slash||'#567B89'}`:""}">
           ${showSlash?"/ 表示中":"/ 非表示"}
         </button>
       </div>
-    </div>
-    <div class="sentences">
-      ${l.sentences.map(s => `
-        <div class="sentence-card" style="border-left:3px solid ${l.theme.primary}44">
-          <div class="sentence-en-row">
-            <div class="sentence-en">${s.chunks.map(c => renderChunk(c, l)).join("")}</div>
-            <button class="sentence-speak-btn" onclick="speakWord('${escHtml(getSentenceText(s))}')" style="color:${l.theme.primary}">🔊</button>
-          </div>
-          ${showTrans?`<div class="sentence-ja">🇯🇵 ${escHtml(s.ja)}</div>`:""}
-        </div>`).join("")}
     </div>`;
+
+  // 各sentenceを文末記号で分割してカードを生成
+  let sentenceCards = "";
+  let cardIndex = 0;
+
+  l.sentences.forEach((s) => {
+    const subGroups = splitChunksIntoSubSentences(s.chunks);
+
+    subGroups.forEach((chunksGroup, groupIdx) => {
+      const engText = getSubSentenceText(chunksGroup);
+      if (!engText) return;
+
+      // ja訳の決定：
+      // - 最初のサブグループ → s.ja（元データの訳）を使う
+      // - 2つ目以降のサブグループ → キャッシュにあれば使う、なければプレースホルダー
+      let jaText = "";
+      if (groupIdx === 0) {
+        jaText = s.ja || "";
+      } else {
+        // キャッシュにあれば即表示、なければ「翻訳中...」と表示して非同期で取得
+        jaText = jaCache[engText] || null;
+      }
+
+      const cardId = `sc-${cardIndex}`;
+      cardIndex++;
+
+      // 英文HTMLを生成
+      const engHtml = chunksGroup.map(c => renderChunk(c, l)).join("");
+      // speakボタン用のテキスト（HTMLエスケープ済み）
+      const engTextEsc = escHtml(engText);
+
+      if (jaText !== null) {
+        // 訳が確定している場合
+        sentenceCards += `
+          <div class="sentence-card" id="${cardId}" style="border-left:3px solid ${l.theme.primary}44">
+            <div class="sentence-en-row">
+              <div class="sentence-en">${engHtml}</div>
+              <button class="sentence-speak-btn" onclick="speakWord('${engTextEsc}')" style="color:${l.theme.primary}">🔊</button>
+            </div>
+            ${showTrans && jaText ? `<div class="sentence-ja">🇯🇵 ${escHtml(jaText)}</div>` : ""}
+          </div>`;
+      } else {
+        // 訳が未取得の場合（プレースホルダー表示→非同期で更新）
+        sentenceCards += `
+          <div class="sentence-card" id="${cardId}" style="border-left:3px solid ${l.theme.primary}44">
+            <div class="sentence-en-row">
+              <div class="sentence-en">${engHtml}</div>
+              <button class="sentence-speak-btn" onclick="speakWord('${engTextEsc}')" style="color:${l.theme.primary}">🔊</button>
+            </div>
+            ${showTrans ? `<div class="sentence-ja" id="ja-${cardId}">🇯🇵 <span style="color:#aaa">翻訳中...</span></div>` : ""}
+          </div>`;
+
+        // 非同期で翻訳を取得してDOMを更新
+        if (showTrans) {
+          translateSentence(engText).then(jaResult => {
+            const jaEl = document.getElementById(`ja-${cardId}`);
+            if (jaEl) jaEl.innerHTML = `🇯🇵 ${escHtml(jaResult)}`;
+          });
+        }
+      }
+    });
+  });
+
+  return legendHtml + `<div class="sentences">${sentenceCards}</div>`;
 }
 
+// ─── LIST TAB ─────────────────────────────────────────────────────────────────
 function renderListTab(l, tc, allItems) {
   return `
+    <div class="word-list-hint" style="padding:10px 16px 4px;font-size:12px;color:#888;text-align:center">
+      🟠 単語  🔵 フレーズ ── タップすると発音・意味・例文が見られます
+    </div>
     <div class="word-list">
       ${allItems.map(item => {
         const c = tc[item.t];
         const bm = bookmarks.has(item.w);
+        const safeItem = JSON.stringify(item).replace(/'/g, "&#39;");
         return `
           <div class="word-card" style="border-left:4px solid ${c.border}">
-            <div class="word-card-main" onclick='openPopup(${JSON.stringify(item)})'>
+            <div class="word-card-main" onclick='openPopup(${safeItem})' style="cursor:pointer">
               <div class="word-card-top">
-                <span class="word-badge" style="background:${c.bg};color:${c.text};border:1px solid ${c.border}">${c.label}</span>
-                <span class="word-title">${escHtml(item.w)}</span>
+                <span class="word-badge" style="background:${c.bg};color:${c.text};border:1px solid ${c.border};font-weight:700">${c.label}</span>
+                <span class="word-title" style="color:${c.text};font-weight:700">${escHtml(item.w)}</span>
               </div>
               <div class="word-pron">${escHtml(item.pron||"")} <span class="word-ipa">${escHtml(item.ipa||"")}</span></div>
               <div class="word-meaning">${escHtml(item.meaning||"")}</div>
@@ -449,6 +607,7 @@ function renderListTab(l, tc, allItems) {
     </div>`;
 }
 
+// ─── NOTEBOOK TAB ─────────────────────────────────────────────────────────────
 function renderNotebookTab(l, tc, bmItems) {
   if (!bmItems.length) return `
     <div class="empty-state">
@@ -483,6 +642,7 @@ function renderNotebookTab(l, tc, bmItems) {
     </div>`;
 }
 
+// ─── PRACTICE TAB ─────────────────────────────────────────────────────────────
 function renderPracticeTab(l) {
   const mode = PRACTICE_MODES[practiceMode];
   const isConversation = practiceMode === "conversation" || practiceMode === "roleplay";
@@ -506,8 +666,9 @@ function renderPracticeTab(l) {
           ${roleplayScenarios.map(s=>`<button class="scenario-btn" onclick="startRoleplay('${escHtml(s)}')">${s}</button>`).join("")}
         </div>`:""}
       <div id="practice-messages" class="ai-messages practice-messages">
-        ${practiceHistory.length===0?`<div class="practice-welcome">${mode.icon} ${getPracticeWelcome(practiceMode)}</div>`:
-          practiceHistory.map(m=>`<div class="ai-bubble ${m.role}">${escHtml(m.text)}</div>`).join("")}
+        ${practiceHistory.length===0
+          ? `<div class="practice-welcome">${mode.icon} ${getPracticeWelcome(practiceMode)}</div>`
+          : practiceHistory.map(m=>`<div class="ai-bubble ${m.role}">${escHtml(m.text)}</div>`).join("")}
       </div>
       ${practiceMode!=="roleplay"||practiceHistory.length>0?`
         <div class="ai-input-row">
@@ -523,104 +684,157 @@ function renderPracticeTab(l) {
 }
 
 function getPracticeWelcome(mode) {
-  return {free:"スクリプトについて何でも聞いてください！",conversation:"Let's practice English conversation!\nまず英語で話しかけてみてください 😊",correction:"英文を入力してください。\n丁寧に添削します！",roleplay:"シナリオを選んで会話練習を始めましょう！",quiz:"「スタート」と入力してクイズを始めましょう！"}[mode]||"";
+  return {
+    free: "スクリプトについて何でも聞いてください！",
+    conversation: "Let's practice English conversation!\nまず英語で話しかけてみてください 😊",
+    correction: "英文を入力してください。\n丁寧に添削します！",
+    roleplay: "シナリオを選んで会話練習を始めましょう！",
+    quiz: "「スタート」と入力してクイズを始めましょう！"
+  }[mode] || "";
 }
 
 function getPracticePlaceholder(mode) {
-  return {free:"例：'goes back to' の使い方を教えて",conversation:"Type in English...",correction:"添削してほしい英文を入力...",roleplay:"英語で話しかけてください...",quiz:"「スタート」または答えを入力..."}[mode]||"";
+  return {
+    free: "例：'goes back to' の使い方を教えて",
+    conversation: "Type in English...",
+    correction: "添削してほしい英文を入力...",
+    roleplay: "英語で話しかけてください...",
+    quiz: "「スタート」または答えを入力..."
+  }[mode] || "";
 }
 
 function selectPracticeMode(mode) {
-  practiceMode=mode; practiceHistory=[]; renderLesson();
+  practiceMode = mode; practiceHistory = []; renderLesson();
 }
 
 function startRoleplay(scenario) {
-  practiceHistory=[];
-  const systemPrompt=getSystemPrompt("roleplay",currentLesson)+`\n\n現在のシナリオ: ${scenario}\nあなたからシナリオに合った役を演じて会話を始めてください。`;
-  addPracticeMessage("ai","⏳ シナリオを準備中..."); renderPracticeMessages();
-  callAI([{role:"user",parts:[{text:`シナリオ「${scenario}」で会話練習を始めてください。`}]}],systemPrompt).then(reply=>{
-    practiceHistory=[{role:"ai",text:reply}]; renderLesson(); setTimeout(()=>scrollPractice(),100);
+  practiceHistory = [];
+  const systemPrompt = getSystemPrompt("roleplay", currentLesson) +
+    `\n\n現在のシナリオ: ${scenario}\nあなたからシナリオに合った役を演じて会話を始めてください。`;
+  addPracticeMessage("ai", "⏳ シナリオを準備中...");
+  renderPracticeMessages();
+  callAI(
+    [{ role: "user", parts: [{ text: `シナリオ「${scenario}」で会話練習を始めてください。` }] }],
+    systemPrompt
+  ).then(reply => {
+    practiceHistory = [{ role: "ai", text: reply }];
+    renderLesson();
+    setTimeout(() => scrollPractice(), 100);
   });
 }
 
-function addPracticeMessage(role,text) { practiceHistory.push({role,text}); }
+function addPracticeMessage(role, text) { practiceHistory.push({ role, text }); }
 
 function renderPracticeMessages() {
-  const msgs=document.getElementById("practice-messages");
+  const msgs = document.getElementById("practice-messages");
   if (!msgs) return;
-  msgs.innerHTML=practiceHistory.map(m=>`<div class="ai-bubble ${m.role}">${escHtml(m.text)}</div>`).join("");
+  msgs.innerHTML = practiceHistory.map(m =>
+    `<div class="ai-bubble ${m.role}">${escHtml(m.text)}</div>`
+  ).join("");
   scrollPractice();
 }
 
 function scrollPractice() {
-  const msgs=document.getElementById("practice-messages");
-  if (msgs) msgs.scrollTop=msgs.scrollHeight;
+  const msgs = document.getElementById("practice-messages");
+  if (msgs) msgs.scrollTop = msgs.scrollHeight;
 }
 
 async function sendPractice() {
-  const input=document.getElementById("practice-input");
+  const input = document.getElementById("practice-input");
   if (!input) return;
-  const msg=input.value.trim();
+  const msg = input.value.trim();
   if (!msg) return;
-  input.value="";
-  addPracticeMessage("user",msg);
-  addPracticeMessage("ai","考え中...");
+  input.value = "";
+  addPracticeMessage("user", msg);
+  addPracticeMessage("ai", "考え中...");
   renderPracticeMessages();
-  const messages=practiceHistory.filter(m=>m.text!=="考え中...").slice(0,-1).map(m=>({role:m.role==="user"?"user":"model",parts:[{text:m.text}]}));
-  messages.push({role:"user",parts:[{text:msg}]});
-  const reply=await callAI(messages,getSystemPrompt(practiceMode,currentLesson));
-  const idx=practiceHistory.findLastIndex(m=>m.text==="考え中...");
-  if (idx!==-1) practiceHistory[idx]={role:"ai",text:reply};
+  const messages = practiceHistory
+    .filter(m => m.text !== "考え中...")
+    .slice(0, -1)
+    .map(m => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.text }] }));
+  messages.push({ role: "user", parts: [{ text: msg }] });
+  const reply = await callAI(messages, getSystemPrompt(practiceMode, currentLesson));
+  const idx = practiceHistory.findLastIndex(m => m.text === "考え中...");
+  if (idx !== -1) practiceHistory[idx] = { role: "ai", text: reply };
   renderPracticeMessages();
-  if (practiceMode==="conversation"||practiceMode==="roleplay") speakWord(reply.replace(/\[.*?\]/g,"").replace(/\(.*?\)/g,""));
+  if (practiceMode === "conversation" || practiceMode === "roleplay") {
+    speakWord(reply.replace(/\[.*?\]/g, "").replace(/\(.*?\)/g, ""));
+  }
 }
 
 function speakMyInput() {
-  const lastAI=[...practiceHistory].reverse().find(m=>m.role==="ai");
-  if (lastAI) speakWord(lastAI.text.replace(/\[.*?\]/g,"").replace(/\(.*?\)/g,""));
+  const lastAI = [...practiceHistory].reverse().find(m => m.role === "ai");
+  if (lastAI) speakWord(lastAI.text.replace(/\[.*?\]/g, "").replace(/\(.*?\)/g, ""));
 }
 
-function resetPractice() { practiceHistory=[]; renderLesson(); }
+function resetPractice() { practiceHistory = []; renderLesson(); }
 
-function switchTab(tab) { currentTab=tab; renderLesson(); window.scrollTo(0,0); }
-function toggleTrans() { showTrans=!showTrans; renderLesson(); }
-function toggleSlash() { showSlash=!showSlash; renderLesson(); }
-function toggleBookmark(word) { bookmarks.has(word)?bookmarks.delete(word):bookmarks.add(word); renderLesson(); }
+function switchTab(tab) { currentTab = tab; renderLesson(); window.scrollTo(0, 0); }
+function toggleTrans() { showTrans = !showTrans; renderLesson(); }
+function toggleSlash() { showSlash = !showSlash; renderLesson(); }
+function toggleBookmark(word) {
+  bookmarks.has(word) ? bookmarks.delete(word) : bookmarks.add(word);
+  renderLesson();
+}
 
+// ─── POPUP（単語・フレーズ共通）────────────────────────────────────────────────
+// 【修正ポイント3】vocab も phrase も同じポップアップが開く
+// 英検3級向けに「覚えるポイント」メッセージを表示
 function openPopup(item) {
-  if (typeof item==="string") item=JSON.parse(item);
-  const l=currentLesson, tc=getTC(l), c=tc[item.t], bm=bookmarks.has(item.w);
-  const overlay=document.getElementById("popup-overlay"), card=document.getElementById("popup-card");
-  overlay.classList.remove("hidden"); card.classList.remove("hidden");
-  card.style.borderTop=`6px solid ${c.border}`;
-  card.innerHTML=`
+  if (typeof item === "string") item = JSON.parse(item);
+  const l = currentLesson;
+  const tc = getTC(l);
+  const c = tc[item.t];
+  const bm = bookmarks.has(item.w);
+
+  const overlay = document.getElementById("popup-overlay");
+  const card = document.getElementById("popup-card");
+  overlay.classList.remove("hidden");
+  card.classList.remove("hidden");
+  card.style.borderTop = `6px solid ${c.border}`;
+
+  // 英検3級向けの学習ヒント
+  const studyTip = item.t === "vocab"
+    ? `<div style="background:#FFF8E1;border:1px solid #FFD54F;border-radius:8px;padding:8px 12px;margin:10px 0;font-size:13px;line-height:1.5">
+        📌 <strong>覚えよう！</strong><br>英検3級以上で役立つ重要単語です。<br>発音を声に出して練習しましょう 🗣️
+      </div>`
+    : `<div style="background:#E8F5E9;border:1px solid #81C784;border-radius:8px;padding:8px 12px;margin:10px 0;font-size:13px;line-height:1.5">
+        💡 <strong>フレーズで覚えよう！</strong><br>このまま丸ごと暗記すると会話で使えます ✨
+      </div>`;
+
+  card.innerHTML = `
     <div class="popup-header">
-      <span class="word-badge" style="background:${c.bg};color:${c.text};border:1px solid ${c.border}">${c.label}</span>
-      <button class="bm-popup-btn" onclick="toggleBookmarkPopup('${escHtml(item.w)}')" style="color:${bm?"#CDA69A":"#ccc"}">${bm?"★":"☆"}</button>
+      <span class="word-badge" style="background:${c.bg};color:${c.text};border:1px solid ${c.border};font-weight:700;padding:3px 10px;border-radius:99px;font-size:12px">${c.label}</span>
+      <button class="bm-popup-btn" onclick="toggleBookmarkPopup('${escHtml(item.w)}')" style="color:${bm?"#E08800":"#ccc"};font-size:22px;background:none;border:none;cursor:pointer">${bm?"★":"☆"}</button>
     </div>
     <div class="popup-word-row">
-      <div class="popup-word">"${escHtml(item.w)}"</div>
-      <button class="popup-speak-btn" onclick="speakWord('${escHtml(item.w)}')" style="background:${c.border}">🔊</button>
+      <div class="popup-word" style="color:${c.text};font-size:22px;font-weight:800">"${escHtml(item.w)}"</div>
+      <button class="popup-speak-btn" onclick="speakWord('${escHtml(item.w)}')" style="background:${c.border};color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer">🔊</button>
     </div>
-    <div class="popup-pron">カタカナ: <strong>${escHtml(item.pron||"")}</strong></div>
-    <div class="popup-ipa">${escHtml(item.ipa||"")}</div>
-    <div class="popup-meaning">🇯🇵 ${escHtml(item.meaning||"")}</div>
-    <div class="popup-example">
-      <div class="popup-example-label">例文</div>
-      <div class="popup-example-text">${escHtml(item.example||"")}</div>
+    <div class="popup-pron" style="margin:6px 0;font-size:14px;color:#555">カタカナ: <strong>${escHtml(item.pron||"")}</strong></div>
+    <div class="popup-ipa" style="font-size:13px;color:#888;margin-bottom:6px">${escHtml(item.ipa||"")}</div>
+    <div class="popup-meaning" style="font-size:16px;font-weight:600;color:#222;margin:8px 0">🇯🇵 ${escHtml(item.meaning||"")}</div>
+    ${studyTip}
+    <div class="popup-example" style="background:#f5f5f5;border-radius:8px;padding:10px 12px;margin:8px 0">
+      <div style="font-size:12px;color:#888;margin-bottom:4px;font-weight:600">📝 例文</div>
+      <div style="font-size:14px;color:#333;line-height:1.6">${escHtml(item.example||"")}</div>
     </div>
-    ${bm?`<div class="popup-bm-note">★ 単語帳に登録済み</div>`:""}
-    <button class="popup-close-btn" onclick="closePopup()" style="background:${c.border}">閉じる</button>`;
+    ${bm?`<div class="popup-bm-note" style="color:#E08800;font-size:13px;text-align:center;margin:6px 0">★ 単語帳に登録済み</div>`:""}
+    <button class="popup-close-btn" onclick="closePopup()" style="background:${c.border};color:#fff;border:none;border-radius:8px;padding:10px;width:100%;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px">閉じる</button>`;
 }
 
 function toggleBookmarkPopup(word) {
-  bookmarks.has(word)?bookmarks.delete(word):bookmarks.add(word);
-  const bm=bookmarks.has(word);
-  const btn=document.querySelector(".bm-popup-btn");
-  if (btn){btn.textContent=bm?"★":"☆";btn.style.color=bm?"#CDA69A":"#ccc";}
-  const note=document.querySelector(".popup-bm-note");
-  if (bm&&!note) document.querySelector(".popup-close-btn").insertAdjacentHTML("beforebegin",`<div class="popup-bm-note">★ 単語帳に登録済み</div>`);
-  else if (!bm&&note) note.remove();
+  bookmarks.has(word) ? bookmarks.delete(word) : bookmarks.add(word);
+  const bm = bookmarks.has(word);
+  const btn = document.querySelector(".bm-popup-btn");
+  if (btn) { btn.textContent = bm ? "★" : "☆"; btn.style.color = bm ? "#E08800" : "#ccc"; }
+  const note = document.querySelector(".popup-bm-note");
+  if (bm && !note) {
+    document.querySelector(".popup-close-btn").insertAdjacentHTML("beforebegin",
+      `<div class="popup-bm-note" style="color:#E08800;font-size:13px;text-align:center;margin:6px 0">★ 単語帳に登録済み</div>`);
+  } else if (!bm && note) {
+    note.remove();
+  }
 }
 
 function closePopup() {
@@ -628,37 +842,57 @@ function closePopup() {
   document.getElementById("popup-card").classList.add("hidden");
 }
 
-let flashIdx=0,flashFlipped=false,flashResults=[];
+// ─── FLASH CARD ───────────────────────────────────────────────────────────────
+let flashIdx = 0, flashFlipped = false, flashResults = [];
 
-function startFlash() { flashIdx=0; flashFlipped=false; flashResults=[]; renderFlash(); }
+function startFlash() { flashIdx = 0; flashFlipped = false; flashResults = []; renderFlash(); }
 
 function renderFlash() {
-  const l=currentLesson,tc=getTC(l),items=getAllItems(l).filter(x=>bookmarks.has(x.w));
-  const overlay=document.getElementById("flash-overlay"),card=document.getElementById("flash-card");
-  overlay.classList.remove("hidden"); card.classList.remove("hidden");
-  if (flashIdx>=items.length) {
-    const ok=flashResults.filter(r=>r==="ok").length;
-    card.innerHTML=`<div class="flash-done"><div class="flash-done-icon">🎉</div><div class="flash-done-title">完了！</div><div class="flash-done-score">${items.length}問中 <strong style="color:${l.theme.primary}">${ok}問</strong> 正解</div><div class="flash-done-btns"><button onclick="startFlash()" style="background:${l.theme.primary}">もう一度</button><button onclick="closeFlash()" style="background:#888">閉じる</button></div></div>`;
+  const l = currentLesson, tc = getTC(l);
+  const items = getAllItems(l).filter(x => bookmarks.has(x.w));
+  const overlay = document.getElementById("flash-overlay");
+  const card = document.getElementById("flash-card");
+  overlay.classList.remove("hidden");
+  card.classList.remove("hidden");
+
+  if (flashIdx >= items.length) {
+    const ok = flashResults.filter(r => r === "ok").length;
+    card.innerHTML = `
+      <div class="flash-done">
+        <div class="flash-done-icon">🎉</div>
+        <div class="flash-done-title">完了！</div>
+        <div class="flash-done-score">${items.length}問中 <strong style="color:${l.theme.primary}">${ok}問</strong> 正解</div>
+        <div class="flash-done-btns">
+          <button onclick="startFlash()" style="background:${l.theme.primary}">もう一度</button>
+          <button onclick="closeFlash()" style="background:#888">閉じる</button>
+        </div>
+      </div>`;
     return;
   }
-  const item=items[flashIdx],c=tc[item.t];
-  card.innerHTML=`
-    <div class="flash-counter">${flashIdx+1} / ${items.length}</div>
-    <div class="flash-face${flashFlipped?" flipped":""}" onclick="flipCard()"
-      style="background:${flashFlipped?c.bg:`linear-gradient(135deg,${l.theme.bg1},${l.theme.bg3})`};border:2px solid ${flashFlipped?c.border:"transparent"}">
-      <div class="flash-face-word" style="color:${flashFlipped?c.text:"#2a3a42"}">${escHtml(item.w)}</div>
-      ${flashFlipped?`
-        <button onclick="event.stopPropagation();speakWord('${escHtml(item.w)}')" style="margin-top:8px;background:${c.border};border:none;border-radius:99px;padding:4px 12px;color:#fff;font-weight:700;font-size:12px;cursor:pointer">🔊 発音</button>
+
+  const item = items[flashIdx], c = tc[item.t];
+  card.innerHTML = `
+    <div class="flash-counter">${flashIdx + 1} / ${items.length}</div>
+    <div class="flash-face${flashFlipped ? " flipped" : ""}" onclick="flipCard()"
+      style="background:${flashFlipped ? c.bg : `linear-gradient(135deg,${l.theme.bg1},${l.theme.bg3})`};border:2px solid ${flashFlipped ? c.border : "transparent"}">
+      <div class="flash-face-word" style="color:${flashFlipped ? c.text : "#2a3a42"}">${escHtml(item.w)}</div>
+      ${flashFlipped ? `
+        <button onclick="event.stopPropagation();speakWord('${escHtml(item.w)}')"
+          style="margin-top:8px;background:${c.border};border:none;border-radius:99px;padding:4px 12px;color:#fff;font-weight:700;font-size:12px;cursor:pointer">🔊 発音</button>
         <div class="flash-face-ipa">${escHtml(item.ipa||"")}</div>
         <div class="flash-face-pron">${escHtml(item.pron||"")}</div>
         <div class="flash-face-meaning">${escHtml(item.meaning||"")}</div>
-      `:`<div class="flash-face-hint">タップして答えを見る</div>`}
+      ` : `<div class="flash-face-hint">タップして答えを見る</div>`}
     </div>
-    ${flashFlipped?`<div class="flash-btns"><button onclick="answerFlash('ng')" style="background:#e74c3c">😓 もう一度</button><button onclick="answerFlash('ok')" style="background:#27AE60">✅ 覚えた！</button></div>`:""}`;
+    ${flashFlipped ? `
+      <div class="flash-btns">
+        <button onclick="answerFlash('ng')" style="background:#e74c3c">😓 もう一度</button>
+        <button onclick="answerFlash('ok')" style="background:#27AE60">✅ 覚えた！</button>
+      </div>` : ""}`;
 }
 
-function flipCard() { flashFlipped=true; renderFlash(); }
-function answerFlash(r) { flashResults.push(r); flashIdx++; flashFlipped=false; renderFlash(); }
+function flipCard() { flashFlipped = true; renderFlash(); }
+function answerFlash(r) { flashResults.push(r); flashIdx++; flashFlipped = false; renderFlash(); }
 function closeFlash() {
   document.getElementById("flash-overlay").classList.add("hidden");
   document.getElementById("flash-card").classList.add("hidden");

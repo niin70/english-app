@@ -144,6 +144,11 @@ phrase（フレーズ）の例：
     }
   ]
 }`;
+- sentences は14〜16文程度（Part1: 8文、Part2: 6〜8文）
+- スラッシュ {"w": " /", "t": "slash"} は必ず文の途中・意味のかたまりの区切りに入れる
+- 文末にスラッシュを入れてはいけない
+- vocab・phraseは必ず文の途中に配置し、文末に単独で置かない
+- chunksの最後の要素はnormalかつ文末の句読点（"."や"?"）にすること
 
   const messages = [{
     role: "user",
@@ -455,9 +460,13 @@ function renderScriptTab(l, tc) {
     <div class="sentences">
       ${l.sentences.map(s => `
         <div class="sentence-card" style="border-left:3px solid ${l.theme.primary}44">
-          <div class="sentence-en">${s.chunks.map(c => renderChunk(c, l)).join("")}</div>
+          <div class="sentence-en-row">
+            <div class="sentence-en">${s.chunks.map(c => renderChunk(c, l)).join("")}</div>
+            <button class="sentence-speak-btn" onclick="speakWord('${escHtml(s.chunks.filter(c=>c.t!=='slash').map(c=>c.w).join(''))}')" style="color:${l.theme.primary}">🔊</button>
+          </div>
           ${showTrans?`<div class="sentence-ja">🇯🇵 ${escHtml(s.ja)}</div>`:""}
-        </div>`).join("")}
+        </div>
+`).join("")}
     </div>`;
 }
 

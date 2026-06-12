@@ -8,6 +8,7 @@ let playing = false;
 let progressInterval = null;
 let practiceMode = "free";
 let practiceHistory = [];
+let autoVoiceEnabled = false; // ① 音声スイッチの状態
 
 const STORAGE_KEY = "english_app_custom_lessons";
 
@@ -39,7 +40,6 @@ const PRACTICE_MODES = {
 };
 
 // ─── AI CALL (/api/chat → Vercel → OpenAI) ───────────────────────────────────
-// messages は OpenAI形式: [{role:"user"|"assistant", content:"..."}]
 async function callAI(messages, systemPrompt, maxTokens = 1000) {
   try {
     const res = await fetch("/api/chat", {
@@ -55,7 +55,6 @@ async function callAI(messages, systemPrompt, maxTokens = 1000) {
   }
 }
 
-// OpenAI形式のメッセージを1件作成するヘルパー
 function gMsg(role, text) {
   return { role: role === "user" ? "user" : "assistant", content: text };
 }
@@ -121,18 +120,12 @@ async function generateLesson(userInput) {
 【chunkの作り方 ★最重要★】
 - 意味のある塊（3〜8語）で1つのchunkにする
 - 1語ずつのchunkは絶対禁止
-- 悪い例：[{"w":"I","t":"normal"},{"w":"love","t":"phrase"}] ← loveは簡単すぎ、1語のchunkはNG
-- 良い例：[{"w":"I've always been","t":"normal"},{"w":" /","t":"slash"},{"w":" fascinated by","t":"phrase","pron":"ファシネイテッド バイ","ipa":"/ˈfæs.ɪ.neɪ.tɪd baɪ/","meaning":"〜に魅了されてきた","example":"I've always been fascinated by Japanese culture."}]
 - スラッシュ(/)は節・句の自然な区切りに入れる（1文に2〜4個程度）
 - chunksの最後は必ず句読点{"w":".","t":"normal"}で終わる
 
 【スクリプト構成】2部構成：
 - Part1（8文）：ユーザー視点の英語スピーチ
 - Part2（6文）：ネイティブとの自然な会話（各文のjaに【あなた】または【ネイティブ】を先頭につける）
-
-【日本語訳のルール】
-- jaフィールドは文全体の完全な日本語訳
-- 省略・短縮しない
 
 以下のJSON形式のみで返答（コードブロックや説明文は一切不要）：
 
@@ -161,15 +154,13 @@ async function generateLesson(userInput) {
       "chunks": [
         {"w": "I've always been", "t": "normal"},
         {"w": " /", "t": "slash"},
-        {"w": " deeply", "t": "normal"},
-        {"w": " fascinated by", "t": "phrase", "pron": "ファシネイテッド バイ", "ipa": "/ˈfæs.ɪ.neɪ.tɪd baɪ/", "meaning": "〜に深く魅了されてきた", "example": "I've always been fascinated by street fashion."},
+        {"w": " fascinated by", "t": "phrase", "pron": "ファシネイテッド バイ", "ipa": "/ˈfæs.ɪ.neɪ.tɪd baɪ/", "meaning": "〜に深く魅了されてきた", "example": "I've always been fascinated by Japanese culture."},
         {"w": " the world of fashion.", "t": "normal"}
       ]
     }
   ]
 }`;
 
-  // Gemini形式のメッセージ
   const messages = [
     gMsg("user", `以下の内容で英語学習スクリプトを作成してください：\n\n${userInput}\n\n必ずJSONのみで返答してください。コードブロック記号(\`\`\`)は不要です。`)
   ];
@@ -211,7 +202,6 @@ function speakWord(text) {
     window.speechSynthesis.speak(u);
   }
 
-  // iOSでは音声リストの読み込みに遅延があるため、未ロードなら少し待つ
   const voices = window.speechSynthesis.getVoices();
   if (voices.length > 0) {
     doSpeak();
@@ -220,30 +210,8 @@ function speakWord(text) {
       window.speechSynthesis.onvoiceschanged = null;
       doSpeak();
     };
-    // フォールバック：0.5秒後に強制実行
     setTimeout(doSpeak, 500);
   }
-}
-
-// 文ごとに区切って読み上げる（棒読み防止）
-function speakSentences(sentences) {
-  if (!window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-
-  let idx = 0;
-  function speakNext() {
-    if (idx >= sentences.length || !playing) { setPlaying(false); return; }
-    const u = new SpeechSynthesisUtterance(sentences[idx]);
-    u.lang = "en-US";
-    u.rate = 0.88;
-    u.pitch = 1.05;
-    const v = getEnVoice();
-    if (v) u.voice = v;
-    u.onend = () => { idx++; setTimeout(speakNext, 300); }; // 文間に間を置く
-    u.onerror = () => { idx++; speakNext(); };
-    window.speechSynthesis.speak(u);
-  }
-  speakNext();
 }
 
 function toggleFullPlay() {
@@ -254,7 +222,6 @@ function toggleFullPlay() {
     clearInterval(progressInterval);
     return;
   }
-  // fullTextを文ごとに分割して読み上げ
   const sentences = currentLesson.sentences.map(s => getSentenceText(s));
   setPlaying(true);
 
@@ -300,7 +267,7 @@ function setPlaying(val) {
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
-// 単語＝黄色、フレーズ＝緑 で固定（AIが生成するthemeカラーに依存しない）
+// ② 単語=黄色、フレーズ=緑 で固定（themeカラーに依存しない）
 function getTC(lesson) {
   return {
     vocab:  { bg: "#FFF8C5", border: "#D4A017", text: "#7A5000", label: "単語" },
@@ -325,19 +292,25 @@ function getSentenceText(s) {
 }
 
 // ─── RENDER CHUNK ─────────────────────────────────────────────────────────────
+// ② vocab=黄色、phrase=緑 をCSSクラスで明示的に色分け
 function renderChunk(chunk, lesson) {
   const tc = getTC(lesson);
   if (chunk.t === "normal") return `<span>${escHtml(chunk.w)}</span>`;
   if (chunk.t === "slash") return showSlash
     ? `<span class="slash-mark">/</span>`
     : `<span style="visibility:hidden"> </span>`;
-  if (chunk.t === "vocab" || chunk.t === "phrase") {
-    const c = tc[chunk.t];
+  if (chunk.t === "vocab") {
+    const c = tc.vocab;
     const bm = bookmarks.has(chunk.w) ? '<sup class="bm-star">★</sup>' : "";
     const dataItem = escHtml(JSON.stringify(chunk));
-    return `<mark class="chunk-mark" data-item="${dataItem}" style="background:${c.bg};color:${c.text};border-bottom:2.5px solid ${c.border}">${escHtml(chunk.w)}${bm}</mark>`;
+    return `<mark class="chunk-mark chunk-vocab" data-item="${dataItem}">${escHtml(chunk.w)}${bm}</mark>`;
   }
-  // その他のタイプはnormalとして扱う
+  if (chunk.t === "phrase") {
+    const c = tc.phrase;
+    const bm = bookmarks.has(chunk.w) ? '<sup class="bm-star">★</sup>' : "";
+    const dataItem = escHtml(JSON.stringify(chunk));
+    return `<mark class="chunk-mark chunk-phrase" data-item="${dataItem}">${escHtml(chunk.w)}${bm}</mark>`;
+  }
   return `<span>${escHtml(chunk.w)}</span>`;
 }
 
@@ -441,7 +414,6 @@ function showPreview(lesson) {
   const preview = document.getElementById("preview-area");
   preview.classList.remove("hidden");
 
-  // vocab/phrase の内訳を表示
   const allItems = getAllItems(lesson);
   const vocabCount = allItems.filter(x => x.t === "vocab").length;
   const phraseCount = allItems.filter(x => x.t === "phrase").length;
@@ -478,6 +450,7 @@ function openLesson(id) {
   practiceHistory = [];
   practiceMode = "free";
   currentTab = "script";
+  autoVoiceEnabled = false;
   renderLesson();
 }
 
@@ -522,7 +495,6 @@ function renderLesson() {
     <div id="flash-overlay" class="popup-overlay hidden" onclick="closeFlash()"></div>
     <div id="flash-card" class="flash-card hidden"></div>`;
 
-  // chunk-mark クリックイベント（renderLesson後に再バインド）
   document.querySelectorAll(".chunk-mark").forEach(el => {
     el.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -548,10 +520,10 @@ function renderScriptTab(l, tc) {
   return `
     <div class="controls-row">
       <div class="legend">
-        <span class="legend-dot" style="background:${tc.vocab.border}"></span>
-        <span class="legend-label" style="color:${tc.vocab.text}">単語</span>
-        <span class="legend-dot" style="background:${tc.phrase.border}"></span>
-        <span class="legend-label" style="color:${tc.phrase.text}">フレーズ</span>
+        <span class="legend-dot vocab-dot"></span>
+        <span class="legend-label vocab-label">単語</span>
+        <span class="legend-dot phrase-dot"></span>
+        <span class="legend-label phrase-label">フレーズ</span>
         <span class="legend-slash" style="color:${l.theme.slash}">/</span>
         <span class="legend-label">区切り</span>
       </div>
@@ -584,13 +556,13 @@ function renderListTab(l, tc, allItems) {
   return `
     <div class="word-list">
       ${vocabItems.length > 0 ? `
-        <div class="word-section-header" style="color:${tc.vocab.text};border-bottom:2px solid ${tc.vocab.border}">
+        <div class="word-section-header vocab-section-header">
           📘 単語 (${vocabItems.length})
         </div>
         ${vocabItems.map(item => renderWordCard(item, tc, l)).join("")}
       ` : ""}
       ${phraseItems.length > 0 ? `
-        <div class="word-section-header" style="color:${tc.phrase.text};border-bottom:2px solid ${tc.phrase.border};margin-top:16px">
+        <div class="word-section-header phrase-section-header" style="margin-top:16px">
           💬 フレーズ (${phraseItems.length})
         </div>
         ${phraseItems.map(item => renderWordCard(item, tc, l)).join("")}
@@ -603,10 +575,10 @@ function renderWordCard(item, tc, l) {
   const bm = bookmarks.has(item.w);
   const safeItem = escHtml(JSON.stringify(item));
   return `
-    <div class="word-card" style="border-left:4px solid ${c.border}">
+    <div class="word-card ${item.t === 'vocab' ? 'word-card-vocab' : 'word-card-phrase'}">
       <div class="word-card-main" onclick='openPopupFromAttr("${safeItem}")'>
         <div class="word-card-top">
-          <span class="word-badge" style="background:${c.bg};color:${c.text};border:1px solid ${c.border}">${c.label}</span>
+          <span class="word-badge ${item.t === 'vocab' ? 'badge-vocab' : 'badge-phrase'}">${c.label}</span>
           <span class="word-title">${escHtml(item.w)}</span>
         </div>
         <div class="word-pron">${escHtml(item.pron||"")} <span class="word-ipa">${escHtml(item.ipa||"")}</span></div>
@@ -645,10 +617,10 @@ function renderNotebookTab(l, tc, bmItems) {
         const c = tc[item.t];
         const safeItem = escHtml(JSON.stringify(item));
         return `
-          <div class="word-card" style="border-left:4px solid ${c.border}">
+          <div class="word-card ${item.t === 'vocab' ? 'word-card-vocab' : 'word-card-phrase'}">
             <div class="word-card-main" onclick='openPopupFromAttr("${safeItem}")'>
               <div class="word-card-top">
-                <span class="word-badge" style="background:${c.bg};color:${c.text};border:1px solid ${c.border}">${c.label}</span>
+                <span class="word-badge ${item.t === 'vocab' ? 'badge-vocab' : 'badge-phrase'}">${c.label}</span>
                 <span class="word-title">${escHtml(item.w)}</span>
               </div>
               <div class="word-pron">${escHtml(item.pron||"")} <span class="word-ipa">${escHtml(item.ipa||"")}</span></div>
@@ -702,10 +674,33 @@ function renderPracticeTab(l) {
             onkeydown="if(event.key==='Enter')sendPractice()">
           <button class="ai-send-btn" onclick="sendPractice()" style="background:${mode.color}">送信</button>
         </div>
-        ${isConversation ? `<button class="speak-input-btn" onclick="speakMyInput()" style="color:${mode.color}">🔊 最後のAI返答を読み上げる</button>` : ""}
+        ${isConversation ? `
+          <div class="voice-toggle-row">
+            <span class="voice-toggle-label">🔊 AI返答を音声で読み上げ</span>
+            <label class="voice-switch">
+              <input type="checkbox" id="voice-auto-toggle" ${autoVoiceEnabled ? "checked" : ""}
+                onchange="toggleAutoVoice(this.checked)">
+              <span class="voice-switch-slider"></span>
+            </label>
+          </div>
+        ` : ""}
       ` : ""}
       ${practiceHistory.length>0 ? `<button class="reset-practice-btn" onclick="resetPractice()">🔄 会話をリセット</button>` : ""}
     </div>`;
+}
+
+// ① 音声スイッチのON/OFF
+function toggleAutoVoice(enabled) {
+  autoVoiceEnabled = enabled;
+}
+
+// ① AI返答の英語部分のみ読み上げ（フィードバック除外）
+function speakAIReply(text) {
+  const speakText = text.split("📝 Feedback:")[0]
+    .replace(/\[.*?\]/g, "")
+    .replace(/\(.*?\)/g, "")
+    .trim();
+  if (speakText) speakWord(speakText);
 }
 
 // フィードバック部分を視覚的に分離して表示
@@ -750,6 +745,7 @@ function getPracticePlaceholder(mode) {
 function selectPracticeMode(mode) {
   practiceMode = mode;
   practiceHistory = [];
+  autoVoiceEnabled = false;
   renderLesson();
 }
 
@@ -764,6 +760,7 @@ function startRoleplay(scenario) {
     systemPrompt
   ).then(reply => {
     practiceHistory = [{ role: "ai", text: reply }];
+    if (autoVoiceEnabled) speakAIReply(reply);
     renderLesson();
     setTimeout(() => scrollPractice(), 100);
   });
@@ -795,7 +792,6 @@ async function sendPractice() {
   addPracticeMessage("ai", "考え中...");
   renderPracticeMessages();
 
-  // OpenAI形式のメッセージ履歴を構築
   const messages = practiceHistory
     .filter(m => m.text !== "考え中...")
     .slice(0, -1)
@@ -806,18 +802,9 @@ async function sendPractice() {
   const idx = practiceHistory.findLastIndex(m => m.text === "考え中...");
   if (idx !== -1) practiceHistory[idx] = { role: "ai", text: reply };
   renderPracticeMessages();
-  // 自動読み上げは廃止。🔊ボタンで手動再生
-}
 
-function speakMyInput() {
-  const lastAI = [...practiceHistory].reverse().find(m => m.role === "ai");
-  if (lastAI) {
-    const speakText = lastAI.text.split("📝 Feedback:")[0]
-      .replace(/\[.*?\]/g, "")
-      .replace(/\(.*?\)/g, "")
-      .trim();
-    speakWord(speakText);
-  }
+  // ① スイッチONなら自動読み上げ
+  if (autoVoiceEnabled) speakAIReply(reply);
 }
 
 function resetPractice() {
@@ -841,7 +828,7 @@ function openPopup(item) {
   }
   const l = currentLesson;
   const tc = getTC(l);
-  const c = tc[item.t] || tc["vocab"]; // fallback
+  const c = tc[item.t] || tc["vocab"];
   const bm = bookmarks.has(item.w);
   const overlay = document.getElementById("popup-overlay");
   const card = document.getElementById("popup-card");
@@ -850,7 +837,7 @@ function openPopup(item) {
   card.style.borderTop = `6px solid ${c.border}`;
   card.innerHTML = `
     <div class="popup-header">
-      <span class="word-badge" style="background:${c.bg};color:${c.text};border:1px solid ${c.border}">${c.label}</span>
+      <span class="word-badge ${item.t === 'vocab' ? 'badge-vocab' : 'badge-phrase'}">${c.label}</span>
       <button class="bm-popup-btn" onclick="toggleBookmarkPopup('${escHtml(item.w)}')" style="color:${bm?"#CDA69A":"#ccc"}">${bm?"★":"☆"}</button>
     </div>
     <div class="popup-word-row">
@@ -942,49 +929,10 @@ function closeFlash() {
   document.getElementById("flash-card").classList.add("hidden");
 }
 
-// ─── ADDITIONAL CSS for feedback box ─────────────────────────────────────────
-(function injectFeedbackStyles() {
-  const style = document.createElement("style");
-  style.textContent = `
-    .ai-feedback-box {
-      margin-top: 10px;
-      padding: 10px 12px;
-      background: #FFF8E1;
-      border-left: 3px solid #F5A623;
-      border-radius: 0 8px 8px 0;
-      font-size: 13px;
-    }
-    .ai-feedback-label {
-      font-weight: 700;
-      color: #E67E22;
-      margin-bottom: 4px;
-      font-size: 12px;
-    }
-    .ai-feedback-text {
-      color: #5D4037;
-      line-height: 1.6;
-      white-space: pre-line;
-    }
-    .word-section-header {
-      font-size: 13px;
-      font-weight: 700;
-      padding: 8px 4px;
-      margin-bottom: 4px;
-      letter-spacing: 0.05em;
-    }
-    .ai-bubble-main {
-      white-space: pre-line;
-    }
-  `;
-  document.head.appendChild(style);
-})();
-
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 window.addEventListener("load", () => {
-  // 音声読み込みを事前に行う
   if (window.speechSynthesis) {
     window.speechSynthesis.getVoices();
-    // iOSなどで遅延ロードされる場合の対応
     window.speechSynthesis.onvoiceschanged = () => {
       window.speechSynthesis.getVoices();
     };

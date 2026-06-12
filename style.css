@@ -68,7 +68,12 @@ button { font-family: inherit; cursor: pointer; }
 .controls-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
 .legend { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .legend-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-.legend-slash { font-size: 13px; font-weight: 700; color: #567B89; }
+/* ② 凡例ドットの色を固定 */
+.vocab-dot { background: #D4A017; }
+.phrase-dot { background: #2E8B57; }
+.vocab-label { color: #7A5000; }
+.phrase-label { color: #1A4D2E; }
+.legend-slash { font-size: 13px; font-weight: 700; }
 .legend-label { font-size: 10px; color: #aaa; margin-right: 4px; }
 .toggle-btns { display: flex; gap: 6px; }
 .toggle-btn { padding: 4px 10px; border-radius: 99px; border: 1.5px solid #e0d8d4; background: #fff; color: #bbb; font-size: 11px; font-weight: 700; }
@@ -77,52 +82,38 @@ button { font-family: inherit; cursor: pointer; }
 .sentence-card { background: #fff; border-radius: 13px; padding: 13px 14px 11px; box-shadow: 0 1px 8px rgba(86,123,137,0.07); }
 .sentence-en { line-height: 2.0; font-size: 15px; color: #2a3a42; }
 .sentence-ja { margin-top: 6px; padding-top: 6px; border-top: 1px solid #f0ece8; font-size: 12.5px; color: #aaa; line-height: 1.7; font-style: italic; }
+.sentence-en-row { display: flex; align-items: flex-start; gap: 8px; }
+.sentence-en-row .sentence-en { flex: 1; }
+.sentence-speak-btn { background: none; border: none; font-size: 16px; cursor: pointer; padding: 2px 0; flex-shrink: 0; opacity: 0.7; margin-top: 4px; }
+.sentence-speak-btn:hover { opacity: 1; }
+
+/* ② chunk-mark: 単語=黄色、フレーズ=緑 */
 mark.chunk-mark { display: inline; border-radius: 4px; padding: 1px 3px; cursor: pointer; font-weight: 600; transition: filter 0.15s; }
 mark.chunk-mark:hover { filter: brightness(0.92); }
+mark.chunk-vocab {
+  background: #FFF8C5 !important;
+  color: #7A5000 !important;
+  border-bottom: 2.5px solid #D4A017 !important;
+}
+mark.chunk-phrase {
+  background: #D6F0D6 !important;
+  color: #1A4D2E !important;
+  border-bottom: 2.5px solid #2E8B57 !important;
+}
 .slash-mark { color: #567B89; font-weight: 700; opacity: 0.7; font-size: 14px; }
 sup.bm-star { font-size: 9px; margin-left: 1px; }
 
+/* ② 単語一覧カードの左ボーダー色 */
 .word-list { display: flex; flex-direction: column; gap: 9px; }
 .word-card { background: #fff; border-radius: 13px; padding: 13px 14px; display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 8px rgba(86,123,137,0.07); }
+.word-card-vocab { border-left: 4px solid #D4A017; }
+.word-card-phrase { border-left: 4px solid #2E8B57; }
 .word-card-main { flex: 1; cursor: pointer; }
-.word-card-top { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
-.word-badge { border-radius: 5px; font-size: 10px; font-weight: 700; padding: 1px 6px; flex-shrink: 0; }
-.word-title { font-weight: 800; color: #2a3a42; font-size: 14.5px; }
-.word-pron { font-size: 12px; color: #aaa; margin-bottom: 2px; }
-.word-ipa { font-family: monospace; font-size: 11px; color: #ccc; }
-.word-meaning { font-size: 12.5px; color: #888; }
-.word-card-actions { display: flex; flex-direction: column; gap: 6px; align-items: center; }
-.icon-btn { background: #f5f2ef; border: none; border-radius: 50%; width: 32px; height: 32px; font-size: 14px; display: flex; align-items: center; justify-content: center; color: #888; }
-.icon-btn.bm-btn { background: none; font-size: 20px; color: #ddd; transition: color 0.2s; }
-.icon-btn.bm-btn.active { color: #CDA69A; }
-
-.empty-state { text-align: center; padding: 60px 20px; }
-.empty-icon { font-size: 48px; margin-bottom: 12px; }
-.empty-title { font-size: 17px; font-weight: 700; color: #bbb; margin-bottom: 6px; }
-.empty-sub { font-size: 13px; color: #ccc; }
-.notebook-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.notebook-count { font-size: 13px; color: #aaa; }
-.flash-btn { padding: 8px 16px; border-radius: 99px; border: none; color: #fff; font-size: 12px; font-weight: 700; box-shadow: 0 2px 8px rgba(86,123,137,0.2); }
-
-.ai-tab { display: flex; flex-direction: column; gap: 14px; }
-.ai-intro { background: #fff; border-radius: 14px; padding: 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 8px rgba(86,123,137,0.07); }
-.ai-intro-icon { font-size: 28px; flex-shrink: 0; }
-.ai-intro-text { font-size: 13px; color: #888; line-height: 1.6; }
-.ai-messages { min-height: 120px; max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 0; }
-.ai-bubble { max-width: 88%; padding: 10px 14px; border-radius: 14px; font-size: 13.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
-.ai-bubble.user { background: linear-gradient(135deg,#567B89,#7a9dab); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
-.ai-bubble.ai { background: #fff; color: #2a3a42; align-self: flex-start; border-bottom-left-radius: 4px; box-shadow: 0 1px 8px rgba(86,123,137,0.1); }
-.ai-bubble.loading { opacity: 0.6; }
-.ai-input-row { display: flex; gap: 8px; }
-.ai-input { flex: 1; background: #fff; border: 1.5px solid #d8e0e4; border-radius: 12px; padding: 10px 14px; color: #2a3a42; font-size: 14px; font-family: inherit; outline: none; }
-.ai-input::placeholder { color: #ccc; }
-.ai-input:focus { border-color: #567B89; }
-.ai-send-btn { padding: 10px 18px; border: none; border-radius: 12px; color: #fff; font-weight: 700; font-size: 14px; flex-shrink: 0; }
+< truncated lines 112-151 >
 
 .practice-tab { display: flex; flex-direction: column; gap: 12px; }
 .practice-mode-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
 .practice-mode-btn { background: #fff; border: 1.5px solid #e0d8d4; border-radius: 12px; padding: 10px 6px; display: flex; flex-direction: column; align-items: center; gap: 4px; transition: all 0.2s; box-shadow: 0 1px 4px rgba(86,123,137,0.07); }
-.practice-mode-btn.active { font-weight: 700; }
 .practice-mode-icon { font-size: 20px; }
 .practice-mode-label { font-size: 10px; color: #aaa; text-align: center; line-height: 1.3; }
 .practice-mode-btn.active .practice-mode-label { color: #fff; font-weight: 700; }
@@ -133,8 +124,62 @@ sup.bm-star { font-size: 9px; margin-left: 1px; }
 .scenario-btn:hover { background: #f5f2ef; }
 .practice-messages { min-height: 160px; max-height: 320px; }
 .practice-welcome { color: #bbb; font-size: 14px; text-align: center; padding: 24px 10px; line-height: 1.8; white-space: pre-line; }
-.speak-input-btn { background: none; border: none; font-size: 12px; font-weight: 700; padding: 4px 0; cursor: pointer; opacity: 0.7; }
 .reset-practice-btn { background: #f5f2ef; border: none; border-radius: 99px; padding: 8px 16px; color: #aaa; font-size: 12px; font-weight: 700; align-self: center; margin-top: 4px; }
+
+/* ① 音声スイッチ */
+.voice-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  margin: 4px 0 2px;
+  background: #f7f9fa;
+  border-radius: 10px;
+  border: 1px solid #e0e8ec;
+}
+.voice-toggle-label {
+  font-size: 13px;
+  color: #666;
+  font-weight: 500;
+}
+.voice-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.voice-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.voice-switch-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: #ccc;
+  border-radius: 24px;
+  transition: 0.25s;
+}
+.voice-switch-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.25s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+.voice-switch input:checked + .voice-switch-slider {
+  background: #27AE60;
+}
+.voice-switch input:checked + .voice-switch-slider:before {
+  transform: translateX(20px);
+}
 
 .popup-overlay { position: fixed; inset: 0; background: rgba(42,58,66,0.25); backdrop-filter: blur(4px); z-index: 100; }
 .popup-card { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); width: 100%; max-width: 480px; background: #fff; border-radius: 20px 20px 0 0; padding: 24px 22px 32px; z-index: 101; animation: slideUp 0.22s cubic-bezier(.4,0,.2,1); box-shadow: 0 -4px 30px rgba(86,123,137,0.15); }
@@ -153,7 +198,6 @@ sup.bm-star { font-size: 9px; margin-left: 1px; }
 .popup-bm-note { font-size: 11px; color: #CDA69A; text-align: center; margin: 6px 0; }
 .popup-close-btn { margin-top: 12px; width: 100%; padding: 13px; border: none; border-radius: 11px; color: #fff; font-weight: 800; font-size: 15px; letter-spacing: 0.05em; box-shadow: 0 3px 10px rgba(86,123,137,0.3); }
 
-
 .flash-card { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); width: calc(100% - 32px); max-width: 400px; background: #fff; border-radius: 20px; padding: 26px 22px 22px; z-index: 201; animation: popIn 0.18s cubic-bezier(.4,2,.6,1); box-shadow: 0 8px 40px rgba(86,123,137,0.18); }
 @keyframes popIn { from{transform:translate(-50%,-50%) scale(.88);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1} }
 .flash-counter { font-size: 12px; color: #bbb; text-align: center; margin-bottom: 14px; }
@@ -171,15 +215,48 @@ sup.bm-star { font-size: 9px; margin-left: 1px; }
 .flash-done-score { font-size: 15px; color: #888; margin-top: 4px; }
 .flash-done-btns { display: flex; gap: 10px; margin-top: 20px; }
 .flash-done-btns button { flex: 1; padding: 11px; border: none; border-radius: 10px; color: #fff; font-weight: 700; font-size: 14px; }
+
 .hidden { display: none !important; }
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(86,123,137,0.2); border-radius: 99px; }
-.sentence-en-row { display: flex; align-items: flex-start; gap: 8px; }
-.sentence-en-row .sentence-en { flex: 1; }
-.sentence-speak-btn { background: none; border: none; font-size: 16px; cursor: pointer; padding: 2px 0; flex-shrink: 0; opacity: 0.7; margin-top: 2px; }
-.sentence-speak-btn:hover { opacity: 1; }
-.sentence-en-row { display: flex; align-items: flex-start; gap: 8px; }
-.sentence-en-row .sentence-en { flex: 1; }
-.sentence-speak-btn { background: none; border: none; font-size: 16px; cursor: pointer; padding: 2px 0; flex-shrink: 0; opacity: 0.7; margin-top: 4px; }
-.sentence-speak-btn:hover { opacity: 1; }
+.word-card-top { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+.word-badge { border-radius: 5px; font-size: 10px; font-weight: 700; padding: 1px 6px; flex-shrink: 0; }
+/* ② バッジの色を固定 */
+.badge-vocab { background: #FFF8C5; color: #7A5000; border: 1px solid #D4A017; }
+.badge-phrase { background: #D6F0D6; color: #1A4D2E; border: 1px solid #2E8B57; }
+.word-title { font-weight: 800; color: #2a3a42; font-size: 14.5px; }
+.word-pron { font-size: 12px; color: #aaa; margin-bottom: 2px; }
+.word-ipa { font-family: monospace; font-size: 11px; color: #ccc; }
+.word-meaning { font-size: 12.5px; color: #888; }
+.word-card-actions { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.icon-btn { background: #f5f2ef; border: none; border-radius: 50%; width: 32px; height: 32px; font-size: 14px; display: flex; align-items: center; justify-content: center; color: #888; }
+.icon-btn.bm-btn { background: none; font-size: 20px; color: #ddd; transition: color 0.2s; }
+.icon-btn.bm-btn.active { color: #CDA69A; }
+
+/* ② 単語一覧のセクションヘッダー */
+.word-section-header { font-size: 13px; font-weight: 700; padding: 8px 4px; margin-bottom: 4px; letter-spacing: 0.05em; }
+.vocab-section-header { color: #7A5000; border-bottom: 2px solid #D4A017; }
+.phrase-section-header { color: #1A4D2E; border-bottom: 2px solid #2E8B57; }
+
+.empty-state { text-align: center; padding: 60px 20px; }
+.empty-icon { font-size: 48px; margin-bottom: 12px; }
+.empty-title { font-size: 17px; font-weight: 700; color: #bbb; margin-bottom: 6px; }
+.empty-sub { font-size: 13px; color: #ccc; }
+.notebook-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.notebook-count { font-size: 13px; color: #aaa; }
+.flash-btn { padding: 8px 16px; border-radius: 99px; border: none; color: #fff; font-size: 12px; font-weight: 700; box-shadow: 0 2px 8px rgba(86,123,137,0.2); }
+
+.ai-messages { min-height: 120px; max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 0; }
+.ai-bubble { max-width: 88%; padding: 10px 14px; border-radius: 14px; font-size: 13.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+.ai-bubble.user { background: linear-gradient(135deg,#567B89,#7a9dab); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+.ai-bubble.ai { background: #fff; color: #2a3a42; align-self: flex-start; border-bottom-left-radius: 4px; box-shadow: 0 1px 8px rgba(86,123,137,0.1); }
+.ai-bubble-main { white-space: pre-line; }
+.ai-feedback-box { margin-top: 10px; padding: 10px 12px; background: #FFF8E1; border-left: 3px solid #F5A623; border-radius: 0 8px 8px 0; font-size: 13px; }
+.ai-feedback-label { font-weight: 700; color: #E67E22; margin-bottom: 4px; font-size: 12px; }
+.ai-feedback-text { color: #5D4037; line-height: 1.6; white-space: pre-line; }
+.ai-input-row { display: flex; gap: 8px; }
+.ai-input { flex: 1; background: #fff; border: 1.5px solid #d8e0e4; border-radius: 12px; padding: 10px 14px; color: #2a3a42; font-size: 14px; font-family: inherit; outline: none; }
+.ai-input::placeholder { color: #ccc; }
+.ai-input:focus { border-color: #567B89; }
+.ai-send-btn { padding: 10px 18px; border: none; border-radius: 12px; color: #fff; font-weight: 700; font-size: 14px; flex-shrink: 0; }

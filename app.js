@@ -200,13 +200,29 @@ function getEnVoice() {
 function speakWord(text) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = "en-US";
-  u.rate = 0.85;
-  u.pitch = 1.0;
-  const v = getEnVoice();
-  if (v) u.voice = v;
-  window.speechSynthesis.speak(u);
+
+  function doSpeak() {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "en-US";
+    u.rate = 0.85;
+    u.pitch = 1.0;
+    const v = getEnVoice();
+    if (v) u.voice = v;
+    window.speechSynthesis.speak(u);
+  }
+
+  // iOSでは音声リストの読み込みに遅延があるため、未ロードなら少し待つ
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length > 0) {
+    doSpeak();
+  } else {
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.speechSynthesis.onvoiceschanged = null;
+      doSpeak();
+    };
+    // フォールバック：0.5秒後に強制実行
+    setTimeout(doSpeak, 500);
+  }
 }
 
 // 文ごとに区切って読み上げる（棒読み防止）
@@ -284,10 +300,11 @@ function setPlaying(val) {
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
+// 単語＝黄色、フレーズ＝緑 で固定（AIが生成するthemeカラーに依存しない）
 function getTC(lesson) {
   return {
-    vocab:  { bg: lesson.theme.vocabBg,  border: lesson.theme.vocabBorder,  text: lesson.theme.vocabText,  label: "単語" },
-    phrase: { bg: lesson.theme.phraseBg, border: lesson.theme.phraseBorder, text: lesson.theme.phraseText, label: "フレーズ" }
+    vocab:  { bg: "#FFF8C5", border: "#D4A017", text: "#7A5000", label: "単語" },
+    phrase: { bg: "#D6F0D6", border: "#2E8B57", text: "#1A4D2E", label: "フレーズ" }
   };
 }
 
@@ -685,7 +702,7 @@ function renderPracticeTab(l) {
             onkeydown="if(event.key==='Enter')sendPractice()">
           <button class="ai-send-btn" onclick="sendPractice()" style="background:${mode.color}">送信</button>
         </div>
-        ${isConversation ? `<button class="speak-input-btn" onclick="speakMyInput()" style="color:${mode.color}">🔊 AIの返答を読み上げる</button>` : ""}
+        ${isConversation ? `<button class="speak-input-btn" onclick="speakMyInput()" style="color:${mode.color}">🔊 最後のAI返答を読み上げる</button>` : ""}
       ` : ""}
       ${practiceHistory.length>0 ? `<button class="reset-practice-btn" onclick="resetPractice()">🔄 会話をリセット</button>` : ""}
     </div>`;
@@ -789,14 +806,7 @@ async function sendPractice() {
   const idx = practiceHistory.findLastIndex(m => m.text === "考え中...");
   if (idx !== -1) practiceHistory[idx] = { role: "ai", text: reply };
   renderPracticeMessages();
-  if (practiceMode === "conversation" || practiceMode === "roleplay") {
-    // フィードバック部分を除いた英語部分だけ読み上げ
-    const speakText = reply.split("📝 Feedback:")[0]
-      .replace(/\[.*?\]/g, "")
-      .replace(/\(.*?\)/g, "")
-      .trim();
-    speakWord(speakText);
-  }
+  // 自動読み上げは廃止。🔊ボタンで手動再生
 }
 
 function speakMyInput() {

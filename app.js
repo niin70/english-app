@@ -614,7 +614,7 @@ function renderScriptTab(l, tc) {
         <div class="sentence-card" style="border-left:3px solid ${l.theme.primary}44">
           <div class="sentence-en-row">
             <div class="sentence-en">${s.chunks.map(c => renderChunk(c, l)).join("")}</div>
-            ${sentText ? `<button class="sentence-speak-btn" onclick="speakWord(${JSON.stringify(sentText)})" style="color:${l.theme.primary}">🔊</button>` : ""}
+            ${sentText ? `<button class="sentence-speak-btn" onclick="speakWord('${escHtml(sentText)}')" style="color:${l.theme.primary}">🔊</button>` : ""}
           </div>
           ${showTrans ? `<div class="sentence-ja">🇯🇵 ${escHtml(s.ja)}</div>` : ""}
         </div>`;
@@ -667,7 +667,7 @@ function renderWordCard(item, tc, l) {
         <div class="word-meaning">${escHtml(item.meaning||"")}</div>
       </div>
       <div class="word-card-actions">
-        ${wordText ? `<button class="icon-btn" onclick="speakWord(${JSON.stringify(wordText)})">🔊</button>` : ""}
+        ${wordText ? `<button class="icon-btn" onclick="speakWord('${escHtml(wordText)}')">🔊</button>` : ""}
         <button class="icon-btn bm-btn${bm?" active":""}" onclick="toggleBookmark('${escHtml(item.w)}')">${bm?"★":"☆"}</button>
       </div>
     </div>`;
@@ -710,7 +710,7 @@ function renderNotebookTab(l, tc, bmItems) {
               <div class="word-meaning">${escHtml(item.meaning||"")}</div>
             </div>
             <div class="word-card-actions">
-              ${wordText ? `<button class="icon-btn" onclick="speakWord(${JSON.stringify(wordText)})">🔊</button>` : ""}
+              ${wordText ? `<button class="icon-btn" onclick="speakWord('${escHtml(wordText)}')">🔊</button>` : ""}
               <button class="icon-btn bm-btn active" onclick="toggleBookmark('${escHtml(item.w)}')">★</button>
             </div>
           </div>`;
@@ -922,7 +922,7 @@ function openPopup(item) {
     </div>
     <div class="popup-word-row">
       <div class="popup-word">"${escHtml(item.w)}"</div>
-      ${wordText ? `<button class="popup-speak-btn" onclick="speakWord(${JSON.stringify(wordText)})" style="background:${c.border}">🔊</button>` : ""}
+      ${wordText ? `<button class="popup-speak-btn" onclick="speakWord('${escHtml(wordText)}')" style="background:${c.border}">🔊</button>` : ""}
     </div>
     <div class="popup-pron">カタカナ: <strong>${escHtml(item.pron||"")}</strong></div>
     <div class="popup-ipa">${escHtml(item.ipa||"")}</div>
@@ -987,7 +987,7 @@ function renderFlash() {
       style="background:${flashFlipped ? c.bg : `linear-gradient(135deg,#567B89,#CDA69A)`};border:2px solid ${flashFlipped ? c.border : "transparent"}">
       <div class="flash-face-word" style="color:${flashFlipped ? c.text : "#fff"}">${escHtml(item.w)}</div>
       ${flashFlipped ? `
-        ${wordText ? `<button onclick="event.stopPropagation();speakWord(${JSON.stringify(wordText)})"
+        ${wordText ? `<button onclick="event.stopPropagation();speakWord('${escHtml(wordText)}')"
           style="margin-top:8px;background:${c.border};border:none;border-radius:99px;padding:4px 12px;color:#fff;font-weight:700;font-size:12px;cursor:pointer">
           🔊 発音
         </button>` : ""}

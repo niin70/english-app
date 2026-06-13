@@ -283,12 +283,18 @@ function speakWord(text) {
   }
 }
 
+// 全文再生用のセッションID（stopしたセッションの遅延callbackを無視するため）
+let playSessionId = 0;
+
 function toggleFullPlay() {
   if (!currentLesson) return;
   if (playing) {
+    // 即座に停止：セッションIDを変えて古いcallbackを無効化
+    playSessionId++;
     window.speechSynthesis.cancel();
     setPlaying(false);
-    clearInterval(progressInterval);
+    const bar = document.getElementById("progress-bar");
+    if (bar) bar.style.width = "0%";
     return;
   }
   const sentences = currentLesson.sentences.map(s => getSentenceText(s)).filter(t => t.length > 0);
@@ -301,7 +307,13 @@ function toggleFullPlay() {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
 
+  // このセッション専用のIDを取得
+  playSessionId++;
+  const mySessionId = playSessionId;
+
   function speakNext() {
+    // セッションIDが変わっていたら（=停止ボタンが押された）即終了
+    if (mySessionId !== playSessionId) return;
     if (current >= total || !playing) {
       setPlaying(false);
       if (bar) { bar.style.width = "100%"; setTimeout(() => { bar.style.width = "0%"; }, 800); }
@@ -314,14 +326,21 @@ function toggleFullPlay() {
     const v = getEnVoice();
     if (v) u.voice = v;
     u.onstart = () => {
+      if (mySessionId !== playSessionId) { window.speechSynthesis.cancel(); return; }
       if (bar) bar.style.width = ((current / total) * 100) + "%";
     };
     u.onend = () => {
+      // 停止済みセッションのcallbackは無視
+      if (mySessionId !== playSessionId) return;
       current++;
       if (bar) bar.style.width = ((current / total) * 100) + "%";
       setTimeout(speakNext, 350);
     };
-    u.onerror = () => { current++; speakNext(); };
+    u.onerror = () => {
+      if (mySessionId !== playSessionId) return;
+      current++;
+      speakNext();
+    };
     window.speechSynthesis.speak(u);
   }
   speakNext();
